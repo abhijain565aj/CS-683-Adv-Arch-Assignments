@@ -31,7 +31,7 @@ $(BIN)/conv: $(STUDENT_SRC) $(MAIN) | $(BIN)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 
 run: $(BIN)/conv
-	./$(BIN)/conv
+	./$(BIN)/conv reorder
 
 # Instructor build against solution/ (kept out of the student handout).
 solution: $(BIN)/conv_solution

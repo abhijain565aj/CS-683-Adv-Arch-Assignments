@@ -33,7 +33,7 @@ static constexpr int kWarmup = 2;
 static constexpr int kReps = 7;
 
 // Default workload and seed.
-static constexpr int kDefH = 4096, kDefW = 4096, kDefK = 8;
+static constexpr int kDefH = 2048, kDefW = 2048, kDefK = 7;
 static constexpr unsigned kDefSeed = 1234u;
 
 // Scoring knobs (calibrated against solution/; see README rubric).

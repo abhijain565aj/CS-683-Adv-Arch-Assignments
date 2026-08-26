@@ -15,14 +15,13 @@ void conv_reorder(const float* in, float* out, const float* ker,
                         out[oy * W + ox] = 0.0;
                     }
                 }
+                for (int oy = 0; oy < H; ++oy) {
     for (int ky = 0; ky < K; ++ky) {
         for (int kx = 0; kx < K; ++kx) {
             const float kval = ker[ky * K + kx];
-            for (int oy = 0; oy < H; ++oy) {
-                // const float* in_ptr = &in[(oy + ky) * in_stride  + kx];
-                // float* out_ptr = &out[oy*W];
                 for (int ox = 0; ox < W; ++ox) {
-                        float xx = in[(oy + ky) * in_stride  + kx + ox] * kval;
+                        // float xx = in[(oy + ky) * in_stride  + kx + ox] * kval;
+                        out[oy * W + ox] += in[(oy + ky) * in_stride  + kx + ox] * kval;
                     }
                 }
             }
