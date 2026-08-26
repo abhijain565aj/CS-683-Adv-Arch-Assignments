@@ -12,6 +12,11 @@ echo "Preparing submission: $TAR_NAME"
 rm -rf "$TMP_DIR"
 rm -f "$TAR_NAME"
 
+if [ $1 == "clean" ]; then
+    echo "Cleaned up previous submission files."
+    exit 0
+fi
+
 # 2. Create the exact folder structure required
 mkdir -p "$TMP_DIR/task1/src"
 mkdir -p "$TMP_DIR/task2/src"
