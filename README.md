@@ -2,10 +2,10 @@
 Assignments and Project for the course CS-683 Advance Computer Architecture
 
 ## Contributors
-- Abhi Jain
-- Dhruv Jain
-- Sameer Arvind Patil
-- Deshank Pratak Singh
+- Abhi Jain (23b0903)
+- Deshank Pratak Singh (23b0938)
+- Dhruv Jain (23b0942)
+- Sameer Arvind Patil (23b1035)
 
 ## CS683 PA-1: Hardware-Conscious Performance Engineering
 
