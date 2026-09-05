@@ -1,0 +1,70 @@
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,margin=0.85in]{geometry}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, calc, shapes.geometric}
+
+\setlist{nosep,leftmargin=*}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setcounter{tocdepth}{2}
+
+% ---------- Evidence placeholders ----------
+% Replace the framed box in any placeholder with, for example:
+% \includegraphics[width=\linewidth]{images/phase3_fake_run1.png}
+\newcommand{\evidencebox}[1]{%
+  \fbox{\parbox[c][4.0cm][c]{0.92\linewidth}{\centering\textbf{IMAGE PLACEHOLDER}\\[3pt]#1}}%
+}
+\newcommand{\smallevidencebox}[1]{%
+  \fbox{\parbox[c][3.0cm][c]{0.90\linewidth}{\centering\small\textbf{IMAGE PLACEHOLDER}\\[2pt]#1}}%
+}
+
+% ---------- Replace before submission ----------
+\newcommand{\ServerIP}{\texttt{<SERVER-IP>}}
+\newcommand{\ClientOneIP}{\texttt{<C1-IP>}}
+\newcommand{\ClientTwoIP}{\texttt{<C2-IP>}}
+\newcommand{\MalloryIP}{\texttt{<MALLORY-IP>}}
+\newcommand{\ChatPort}{\texttt{<CHAT-PORT>}}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    {\scshape\bfseries\Huge Advanced Computer Architecture\par}
+    \vspace{0.2cm}
+    {\scshape\bfseries\Huge (CS-683)\par}
+    \vspace{0.8cm}
+    {\huge \textbf{Programming Assignment 1}\par}
+    \vspace{1cm}
+    {\Large Abhi Jain (23B0903)\par}
+    {\Large Deshank Pratap Singh (23B0938)\par}
+    {\Large Dhruv Jain (23B0942)\par}
+    {\Large Sameer Arvind Patil (23B1035)\par}
+    \vfill
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+\section{Task 1: 2D Convolution}
+\subsection{Loop Unrolling}
+\subsection{Loop Reordering}
+\subsection{Tiling}
+\subsection{SIMD}
+\subsection{Sabka saath sabka vikaas}
+\subsection{Final Performance summary}
+\section{Task 2: Matrix Multiplication}
+\end{document}
