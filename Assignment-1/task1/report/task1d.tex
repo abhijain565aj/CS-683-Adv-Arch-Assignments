@@ -5,43 +5,57 @@
 \subsection{Task 1D: Sabka Saath Sabka Vikaas}
 
 \subsubsection{Combined Optimization}
-
-\TODO{Describe the two or more techniques combined.}
+For our final optimized implementation, we combined five core techniques into a single cohesive architecture :
+\begin{enumerate}
+    \item \textbf{Cache Tiling:} We blocked the output matrix into $32 \times 32$ spatial tiles (\texttt{oyT}, \texttt{oxT}) to restrict the active memory working set .
+    \item \textbf{Loop Reordering:} Within each tile, we inverted the naive loop order to \texttt{ky} $\rightarrow$ \texttt{kx} $\rightarrow$ \texttt{oy} $\rightarrow$ \texttt{ox}, ensuring that the innermost memory accesses across the \texttt{ox} dimension are perfectly sequential .
+    \item \textbf{SIMD Vectorization (AVX2):} We parallelized the innermost \texttt{ox} loop using 256-bit AVX2 vectors (\texttt{\_mm256\_loadu\_ps} and \texttt{\_mm256\_fmadd\_ps}), processing 8 pixels simultaneously .
+    \item \textbf{Loop Unrolling (\texttt{kx}):} We unrolled the inner \texttt{kx} loop by a factor of 2, handling two adjacent kernel columns per iteration to further reduce branch overhead .
+    \item \textbf{Multiple Independent Accumulators:} Inside the vector loop, we unrolled the \texttt{oy} dimension by 4, utilizing 4 independent AVX2 accumulators (\texttt{acc0} to \texttt{acc3}) to process a $4 \times 8$ block of output pixels simultaneously, maximizing instruction-level parallelism .
+\end{enumerate}
 
 \subsubsection{Why Combine These Techniques?}
-
-\TODO{Explain how the techniques complement one another.}
+These optimizations are highly complementary and target different hardware bottlenecks simultaneously. Tiling keeps data trapped in the L2/LLC caches, solving bandwidth bottlenecks. Loop reordering guarantees spatial locality, ensuring the L1 cache and hardware prefetchers feed data optimally. Once the data delivery is optimized, SIMD vectorization directly amplifies raw compute throughput. Finally, loop unrolling with multiple accumulators minimizes loop maintenance instructions while ensuring the CPU's execution ports and FMA units are continuously saturated.
 
 \subsubsection{Final Performance Comparison}
 
 \begin{figure}[H]
-\centering
-% \includegraphics[width=0.95\linewidth]{plots/task1_final_comparison.png}
-\caption{Best performance of the Task 1 optimization techniques.}
+    \centering
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/task1d/speedup_vs_image_size.png}
+        \caption{Speedup vs. Image Size ($K=5$)}
+        \label{fig:task1d_image_size}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/task1d/speedup_vs_kernel_size.png}
+        \caption{Speedup vs. Kernel Size ($2048 \times 2048$)}
+        \label{fig:task1d_kernel_size}
+    \end{subfigure}
+    \caption{Best performance of the Task 1 optimization techniques.}
+    \label{fig:task1_final_comparison}
 \end{figure}
 
 \begin{table}[H]
 \centering
 \caption{Task 1 final performance summary}
-\begin{tabular}{lccc}
+\begin{tabular}{lccl}
 \toprule
-Technique & Best Time & Best Speedup & Observation \\
+Technique & Best Speedup & Workload & Primary Hardware Target \\
 \midrule
-Loop unrolling & \TODO{...} & \TODO{...} & \TODO{...} \\
-Loop reordering & \TODO{...} & \TODO{...} & \TODO{...} \\
-Tiling & \TODO{...} & \TODO{...} & \TODO{...} \\
-SIMD & \TODO{...} & \TODO{...} & \TODO{...} \\
-Tiling + SIMD & \TODO{...} & \TODO{...} & \TODO{...} \\
+Tiling & 1.60$\times$ & $512 \times 512, K=5$ & Cache capacity / L2+LLC hit rate \\
+Loop reordering & 1.99$\times$ & $1024 \times 1024, K=5$ & Spatial locality / Hardware prefetching \\
+Loop unrolling & 3.85$\times$ & $1024 \times 1024, K=5$ & Branch prediction / Loop overhead \\
+SIMD (AVX2) & 9.01$\times$ & $512 \times 512, K=5$ & ALU saturation / Data parallelism \\
+\textbf{Optimized (All Combined)} & \textbf{20.19$\times$} & $512 \times 512, K=5$ & \textbf{Synergistic whole-system utilization} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsubsection{Discussion}
-
-\TODO{Explain the overall trends and whether combining techniques produced
-a synergistic performance benefit.}
+The overall trend clearly proves the presence of a synergistic performance benefit. When we evaluate the techniques individually, SIMD provides the highest isolated peak speedup of $9.01\times$. However, when we integrate all techniques in the \texttt{conv\_optimized} implementation, the peak speedup explodes to $20.19\times$. This occurs because SIMD alone eventually hits a "memory wall"; it computes so quickly that it starves waiting for data. By combining SIMD with cache tiling and reordering, we resolve the memory bottlenecks, allowing the vector units to operate near their theoretical limits.
 
 \subsubsection{Task 1 Conclusion}
-
-\TODO{Write a short conclusion summarizing the most important Task 1
-observations.}
+Throughout Task 1, we learned that treating the CPU as a purely algorithmic engine leaves massive performance untapped. We demonstrated that software must be shaped around hardware microarchitecture to be efficient. Contiguous memory access (reordering) is crucial for cache lines, limiting working sets (tiling) prevents capacity misses, minimizing branches (unrolling) keeps the pipeline full, and utilizing specialized vector registers (SIMD) maximizes arithmetic throughput. True high performance requires a holistic, synergistic approach that simultaneously addresses compute, bandwidth, and latency bottlenecks.
