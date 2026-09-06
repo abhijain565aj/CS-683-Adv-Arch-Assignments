@@ -1,0 +1,19 @@
+Input CSVs: task2a_results_hw_on.csv, task2a_results_hw_off.csv
+Hardware-prefetch labels: off, on
+
+Best prefetch distance in the distance sweep (geometric mean across sizes): 256 floats = 16 cache lines
+Best prefetch level in the level sweep (geometric mean across sizes): T0
+
+Best collected software-prefetch configuration per matrix size:
+  [off]
+    N=128: 0.7800x, distance=512 floats, hint=NTA, time=0.8969 ms
+    N=256: 0.8367x, distance=512 floats, hint=NTA, time=7.4782 ms
+    N=512: 0.8361x, distance=512 floats, hint=NTA, time=63.3618 ms
+    N=1024: 0.8498x, distance=256 floats, hint=T1, time=521.8129 ms
+    N=2048: 0.9054x, distance=512 floats, hint=T2, time=4172.2565 ms
+  [on]
+    N=128: 0.7586x, distance=128 floats, hint=T1, time=0.9001 ms
+    N=256: 0.8197x, distance=256 floats, hint=T1, time=7.5827 ms
+    N=512: 0.8395x, distance=512 floats, hint=NTA, time=63.5991 ms
+    N=1024: 0.8699x, distance=16 floats, hint=T0, time=510.8101 ms
+    N=2048: 0.8981x, distance=64 floats, hint=T0, time=4151.3511 ms
