@@ -1,0 +1,29 @@
+Input: task2b_results.csv
+SIMD widths present: 128,256
+
+Best width by geometric-mean speedup: 256-bit (11.1870x)
+
+N=128
+  No SIMD: 0.7594 ms, 1.0000x, 5.524 GFLOP/s, instructions=12756189
+  128-bit: 0.0876 ms, 8.6721x, 47.900 GFLOP/s, instructions=1999670
+  256-bit: 0.0601 ms, 12.6384x, 69.808 GFLOP/s, instructions=575989
+N=256
+  No SIMD: 6.1957 ms, 1.0000x, 5.416 GFLOP/s, instructions=101418416
+  128-bit: 0.6801 ms, 9.1102x, 49.339 GFLOP/s, instructions=15608599
+  256-bit: 0.6276 ms, 9.8715x, 53.462 GFLOP/s, instructions=3999176
+N=512
+  No SIMD: 53.5188 ms, 1.0000x, 5.016 GFLOP/s, instructions=808661143
+  128-bit: 5.5514 ms, 9.6406x, 48.355 GFLOP/s, instructions=123284782
+  256-bit: 4.4057 ms, 12.1477x, 60.930 GFLOP/s, instructions=29642403
+N=1024
+  No SIMD: 446.3781 ms, 1.0000x, 4.811 GFLOP/s, instructions=6459960252
+  128-bit: 48.5548 ms, 9.1933x, 44.228 GFLOP/s, instructions=979996731
+  256-bit: 38.8641 ms, 11.4856x, 55.256 GFLOP/s, instructions=227791817
+N=1536
+  No SIMD: 1530.3755 ms, 1.0000x, 4.736 GFLOP/s, instructions=21781643645
+  128-bit: 162.5206 ms, 9.4165x, 44.596 GFLOP/s, instructions=3300576135
+  256-bit: 135.8821 ms, 11.2625x, 53.339 GFLOP/s, instructions=758490988
+N=2048
+  No SIMD: 3802.5131 ms, 1.0000x, 4.518 GFLOP/s, instructions=51626977380
+  128-bit: 446.5833 ms, 8.5147x, 38.470 GFLOP/s, instructions=7815847267
+  256-bit: 380.3125 ms, 9.9984x, 45.173 GFLOP/s, instructions=1785784734
