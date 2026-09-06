@@ -1,8 +1,0 @@
-\contentsline {section}{\numberline {1}Task 1: 2D Convolution}{2}{section.1}%
-\contentsline {subsection}{\numberline {1.1}Loop Unrolling}{2}{subsection.1.1}%
-\contentsline {subsection}{\numberline {1.2}Loop Reordering}{2}{subsection.1.2}%
-\contentsline {subsection}{\numberline {1.3}Tiling}{2}{subsection.1.3}%
-\contentsline {subsection}{\numberline {1.4}SIMD}{2}{subsection.1.4}%
-\contentsline {subsection}{\numberline {1.5}Sabka saath sabka vikaas}{2}{subsection.1.5}%
-\contentsline {subsection}{\numberline {1.6}Final Performance summary}{2}{subsection.1.6}%
-\contentsline {section}{\numberline {2}Task 2: Matrix Multiplication}{2}{section.2}%

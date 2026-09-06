@@ -2,3 +2,6 @@ bin/
 solution/
 pa1-dhurandhar-microarchitecture/
 *.tar.gz
+report/*
+!report/*.tex
+!report/*/*.tex
