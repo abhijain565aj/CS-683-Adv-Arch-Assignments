@@ -2,12 +2,12 @@
 % 1C
 % ============================================================
 
-\subsection{Task 1C: SIMD}
+\section{Task 1C: SIMD}
 
-\subsubsection{Baseline Instruction Count}
+\subsection{Baseline Instruction Count}
 For a $512 \times 512$ matrix with a kernel size of $K=5$, the naive baseline implementation executed $\sim$1.31 billion instructions.
 
-\subsubsection{SIMD Implementations}
+\subsection{SIMD Implementations}
 The convolution algorithm was parallelized using Intel AVX intrinsics . The inner spatial loop was stepped by the SIMD vector width (e.g., 8 floats for 256-bit AVX2) . Both 128-bit (SSE) and 256-bit (AVX2) implementations were evaluated across different matrix sizes to measure vectorization efficiency.
 
 \begin{table}[H]
@@ -26,7 +26,7 @@ $2048 \times 2048$ & 256-bit & 2,510,515,355 & 9.150 & 7.47$\times$ \\
 \end{tabular}
 \end{table}
 
-\subsubsection{SIMD Intrinsics}
+\subsection{SIMD Intrinsics}
 
 \begin{itemize}
     \item \texttt{\_mm256\_setzero\_ps}: Purpose: Initializes a 256-bit accumulator vector to zero . Justification: Needed to clear the parallel accumulator state before summing the kernel convolution .
@@ -35,7 +35,7 @@ $2048 \times 2048$ & 256-bit & 2,510,515,355 & 9.150 & 7.47$\times$ \\
     \item \texttt{\_mm256\_fmadd\_ps}: Purpose: Fused multiply-add . Justification: Highly efficient operations that multiply the input vector by the weight vector and add it to the accumulator in a single hardware instruction cycle, halving arithmetic overhead .
 \end{itemize}
 
-\subsubsection{Speedup Plots}
+\subsection{Speedup Plots}
 
 \begin{figure}[H]
     \centering
@@ -66,12 +66,12 @@ $2048 \times 2048$ & 256-bit & 2,510,515,355 & 9.150 & 7.47$\times$ \\
     \caption{SIMD performance and hardware metric improvements.}
 \end{figure}
 
-\subsubsection{Analysis}
+\subsection{Analysis}
 SIMD instructions massively reduced the executed instruction count. As expected, 128-bit SIMD processing 4 floats per cycle reduced instructions by approximately $4.4\times$, while 256-bit SIMD processing 8 floats reduced instructions by an impressive $8.3\times$. This corresponds closely to the theoretical maximums.
 
 Interestingly, while 256-bit SIMD halved the instructions compared to 128-bit, the raw speedup didn't strictly double. At a $1024 \times 1024$ image size, 256-bit only offered a marginal speedup advantage over 128-bit ($7.74\times$ vs $7.10\times$). This indicates that at high instruction-level parallelism, the CPU becomes heavily bound by memory bandwidth (the L1 cache latency) rather than pure arithmetic throughput. 
 
-\subsubsection{Questions}
+\subsection{Questions}
 
 \begin{enumerate}
     \item \textbf{How did the instruction count change?} \\
