@@ -1,0 +1,76 @@
+% ============================================================
+% 1A
+% ============================================================
+
+\subsection{Task 1A: Loop Unrolling and Reordering}
+
+\subsubsection{Baseline}
+
+\TODO{Briefly describe the baseline implementation and relevant loop
+structure.}
+
+\subsubsection{Motivation}
+
+\TODO{What motivated the loop reordering and unrolling?}
+
+\subsubsection{Design Considerations}
+
+\begin{itemize}
+    \item \TODO{Memory access pattern}
+    \item \TODO{Cache locality}
+    \item \TODO{Dependency considerations}
+    \item \TODO{Unrolling factor / loop ordering chosen}
+\end{itemize}
+
+\subsubsection{Implementation}
+
+\TODO{Describe exactly what was changed in the convolution function.}
+
+\smallevidencebox{Optional: code/output screenshot or relevant perf evidence.}
+
+\subsubsection{Experimental Setup}
+
+\begin{table}[H]
+\centering
+\caption{Task 1A experimental setup}
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+CPU & \TODO{CPU} \\
+Matrix sizes & \TODO{sizes} \\
+Kernel sizes & \TODO{sizes} \\
+Compiler & \TODO{compiler} \\
+Runs & \TODO{number} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Results}
+
+\begin{table}[H]
+\centering
+\caption{Task 1A performance}
+\begin{tabular}{lccc}
+\toprule
+Matrix Size & Baseline & Optimized & Speedup \\
+\midrule
+\TODO{...} & \TODO{...} & \TODO{...} & \TODO{...} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Analysis}
+
+\TODO{Explain why performance improved/degraded and identify the relevant
+hardware-level reasons.}
+
+\subsubsection{Questions}
+
+\begin{enumerate}
+    \item What motivated you to make changes to the code?
+    \item What considerations did you take into account?
+    \item How effective were the changes? Which metric was used and why?
+\end{enumerate}
+
+\TODO{Answer the questions above.}
