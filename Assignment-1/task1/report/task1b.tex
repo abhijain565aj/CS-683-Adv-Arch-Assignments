@@ -1,0 +1,97 @@
+% ============================================================
+% 1B
+% ============================================================
+
+\subsection{Task 1B: Tiling}
+
+\subsubsection{L1-D Cache}
+
+\TODO{Report L1-D cache size and relevant CPU information.}
+
+\begin{table}[H]
+\centering
+\caption{Cache information}
+\begin{tabular}{lc}
+\toprule
+Metric & Value \\
+\midrule
+L1-D size & \TODO{...} \\
+L1-D associativity & \TODO{...} \\
+Cache line size & \TODO{...} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\evidencebox{Paste lscpu/cache information here.}
+
+\subsubsection{Baseline Profiling}
+
+\TODO{Report baseline L1-D MPKI using perf.}
+
+\begin{table}[H]
+\centering
+\caption{Baseline profiling}
+\begin{tabular}{lc}
+\toprule
+Metric & Baseline \\
+\midrule
+Instructions & \TODO{...} \\
+L1-D cache misses & \TODO{...} \\
+L1-D MPKI & \TODO{...} \\
+Execution time & \TODO{...} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\evidencebox{Paste perf output/evidence here.}
+
+\subsubsection{Tiled Implementation}
+
+\TODO{Explain the tiling strategy and how tile size was selected.}
+
+\subsubsection{Tile-Size Experiment}
+
+\begin{table}[H]
+\centering
+\caption{Tile-size experiment}
+\begin{tabular}{lcccc}
+\toprule
+Matrix Size & Tile Size & Time & L1-D MPKI & Speedup \\
+\midrule
+\TODO{...} & \TODO{...} & \TODO{...} & \TODO{...} & \TODO{...} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{L1-D MPKI vs. Matrix Size}
+
+\begin{figure}[H]
+\centering
+% \includegraphics[width=0.90\linewidth]{plots/task1_l1d_mpki_vs_size.png}
+\caption{L1-D MPKI vs. matrix size for different tile sizes.}
+\end{figure}
+
+\TODO{Replace the filename or placeholder once the final plot is generated.}
+
+\subsubsection{Speedup vs. Matrix Size}
+
+\begin{figure}[H]
+\centering
+% \includegraphics[width=0.90\linewidth]{plots/task1_tiling_speedup_vs_size.png}
+\caption{Tiling speedup vs. matrix size.}
+\end{figure}
+
+\subsubsection{Analysis}
+
+\begin{enumerate}
+    \item Change in L1-D MPKI from naive to tiled:
+    \TODO{...}
+    \item Variation across matrix sizes:
+    \TODO{...}
+    \item Variation across tile sizes:
+    \TODO{...}
+    \item Cache hierarchy / working-set explanation:
+    \TODO{...}
+    \item Speedup and contributing factors:
+    \TODO{...}
+\end{enumerate}
