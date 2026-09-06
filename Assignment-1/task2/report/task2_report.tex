@@ -1,0 +1,78 @@
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,margin=0.85in]{geometry}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{amsmath}
+\setlist{nosep,leftmargin=*}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setcounter{tocdepth}{2}
+
+% ---------- Common commands ----------
+\newcommand{\evidencebox}[1]{%
+  \fbox{\parbox[c][4cm][c]{0.92\linewidth}{\centering
+  \textbf{IMAGE / EVIDENCE PLACEHOLDER}\\[3pt]#1}}%
+}
+
+\newcommand{\smallevidencebox}[1]{%
+  \fbox{\parbox[c][3cm][c]{0.90\linewidth}{\centering
+  \small\textbf{IMAGE / EVIDENCE PLACEHOLDER}\\[2pt]#1}}%
+}
+
+\newcommand{\TODO}[1]{\textcolor{red}{[TODO: #1]}}
+
+% ---------- Team ----------
+\newcommand{\StudentOne}{Abhi Jain (23B0903)}
+\newcommand{\StudentTwo}{Deshank Pratap Singh (23B0938)}
+\newcommand{\StudentThree}{Dhruv Jain (23B0942)}
+\newcommand{\StudentFour}{Sameer Arvind Patil (23B1035)}
+
+\begin{document}
+
+% ============================================================
+% TITLE
+% ============================================================
+
+\begin{titlepage}
+    \centering
+    {\scshape\bfseries\Huge Advanced Computer Architecture\par}
+    \vspace{0.2cm}
+    {\scshape\bfseries\Huge (CS-683)\par}
+    \vspace{0.8cm}
+    {\huge \textbf{Programming Assignment 1}\par}
+    \vspace{1cm}
+
+    {\Large \StudentOne\par}
+    {\Large \StudentTwo\par}
+    {\Large \StudentThree\par}
+    {\Large \StudentFour\par}
+
+    \vfill
+    {\large Autumn 2026\par}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+\section{Task 2: Matrix Multiplication for Inference}
+
+\TODO{Introduce SGEMM and the objective of optimizing it using software
+prefetching and SIMD.}
+
+\input{task2a}
+\input{task2b}
+\input{task2c}
+
+
+\end{document}
