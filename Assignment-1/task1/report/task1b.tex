@@ -2,13 +2,13 @@
 % 1B: Tiling
 % ============================================================
 
-\subsection{Task 1B: Tiling}
+\section{Task 1B: Tiling}
 
-\subsubsection{Baseline Profiling}
+\subsection{Baseline Profiling}
 The L1 Data (L1-D) cache size on the tested system is 448 KiB. Profiling the baseline (naive) 2D convolution yields an L1-D MPKI of 0.06 for a 2048x2048 matrix with a kernel size of 5.
 
-\subsubsection{Implementation}
-The tiled 2D convolution is implemented by dividing the output matrix into square blocks of a fixed dimension, \texttt{sz}[cite: 5]. The outer loops iterate over the tile origins (\texttt{oyT} and \texttt{oxT}) to process the image block by block[cite: 5]. Within each tile block, the output values are initialized to zero, and the kernel loops (\texttt{ky} and \texttt{kx}) accumulate the weighted inputs strictly within the local spatial bounds[cite: 5]. This reorders the memory accesses to keep the active working set confined within the cache.
+\subsection{Implementation}
+The tiled 2D convolution is implemented by dividing the output matrix into square blocks of a fixed dimension, \texttt{sz} . The outer loops iterate over the tile origins (\texttt{oyT} and \texttt{oxT}) to process the image block by block . Within each tile block, the output values are initialized to zero, and the kernel loops (\texttt{ky} and \texttt{kx}) accumulate the weighted inputs strictly within the local spatial bounds . This reorders the memory accesses to keep the active working set confined within the cache.
 
 \begin{figure}[H]
     \centering
@@ -48,7 +48,7 @@ The tiled 2D convolution is implemented by dividing the output matrix into squar
     \label{fig:task1b_2d}
 \end{figure}
 
-\subsubsection{Analysis}
+\subsection{Analysis}
 
 \begin{enumerate}
     \item \textbf{Report the changes in L1-D MPKI observed when moving from naive to tiled 2D convolution. Justify your observations.} \\

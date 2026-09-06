@@ -2,56 +2,82 @@
 % 1C
 % ============================================================
 
-\subsection{Task 1C: SIMD}
+\section{Task 1C: SIMD}
 
-\subsubsection{Baseline Instruction Count}
+\subsection{Baseline Instruction Count}
+For a $512 \times 512$ matrix with a kernel size of $K=5$, the naive baseline implementation executed $\sim$1.31 billion instructions.
 
-\TODO{Report the number of instructions executed by the naive version.}
-
-\subsubsection{SIMD Implementations}
-
-\TODO{Describe the SIMD implementations used on the evaluation hardware.
-Include supported widths only.}
+\subsection{SIMD Implementations}
+The convolution algorithm was parallelized using Intel AVX intrinsics . The inner spatial loop was stepped by the SIMD vector width (e.g., 8 floats for 256-bit AVX2) . Both 128-bit (SSE) and 256-bit (AVX2) implementations were evaluated across different matrix sizes to measure vectorization efficiency.
 
 \begin{table}[H]
 \centering
-\caption{Task 1C SIMD results}
-\begin{tabular}{lccccc}
+\caption{Task 1C SIMD results ($K=5$)}
+\begin{tabular}{lcccc}
 \toprule
-Matrix Size & SIMD Width & Instructions & Time & Speedup \\
+Matrix Size & SIMD Width & Instructions & Time (ms) & Speedup \\
 \midrule
-\TODO{...} & \TODO{...} & \TODO{...} & \TODO{...} & \TODO{...} \\
+$512 \times 512$   & 128-bit & 296,643,371   & 0.466 & 8.40$\times$ \\
+$512 \times 512$   & 256-bit & 158,009,805   & 0.522 & 7.95$\times$ \\
+$1024 \times 1024$ & 128-bit & 1,183,171,431 & 2.175 & 7.10$\times$ \\
+$1024 \times 1024$ & 256-bit & 628,631,602   & 2.189 & 7.74$\times$ \\
+$2048 \times 2048$ & 256-bit & 2,510,515,355 & 9.150 & 7.47$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsubsection{SIMD Intrinsics}
+\subsection{SIMD Intrinsics}
 
 \begin{itemize}
-    \item \TODO{Intrinsic 1 -- purpose and justification}
-    \item \TODO{Intrinsic 2 -- purpose and justification}
-    \item \TODO{Intrinsic 3 -- purpose and justification}
+    \item \texttt{\_mm256\_setzero\_ps}: Purpose: Initializes a 256-bit accumulator vector to zero . Justification: Needed to clear the parallel accumulator state before summing the kernel convolution .
+    \item \texttt{\_mm256\_loadu\_ps} / \texttt{\_mm256\_storeu\_ps}: Purpose: Loads/stores 8 continuous floats to/from memory . Justification: Since the sliding window shifts by 1 pixel at a time, memory alignment on a 32-byte boundary is impossible to guarantee. Unaligned memory instructions are strictly required .
+    \item \texttt{\_mm256\_set1\_ps}: Purpose: Broadcasts a single kernel weight into all 8 lanes of the SIMD register . Justification: During a single kernel step, the same weight must be multiplied simultaneously against 8 adjacent spatial input pixels .
+    \item \texttt{\_mm256\_fmadd\_ps}: Purpose: Fused multiply-add . Justification: Highly efficient operations that multiply the input vector by the weight vector and add it to the accumulator in a single hardware instruction cycle, halving arithmetic overhead .
 \end{itemize}
 
-\subsubsection{Speedup Plot}
+\subsection{Speedup Plots}
 
 \begin{figure}[H]
-\centering
-% \includegraphics[width=0.90\linewidth]{plots/task1_simd_speedup_vs_size.png}
-\caption{SIMD speedup for different matrix sizes and SIMD widths.}
+    \centering
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/task1c/simd_vs_naive_speedup_image_size_k5.png}
+        \caption{Speedup vs. Image Size ($K=5$)}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/task1c/simd_vs_naive_speedup_kernel_size_2048.png}
+        \caption{Speedup vs. Kernel Size ($2048 \times 2048$)}
+    \end{subfigure}
+    
+    \vspace{1em}
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/task1c/speedup_heatmap_k5.png}
+        \caption{Speedup Heatmap (Width vs Image Size)}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/task1c/instruction_reduction_heatmap_k5.png}
+        \caption{Instruction Reduction Factor}
+    \end{subfigure}
+    \caption{SIMD performance and hardware metric improvements.}
 \end{figure}
 
-\subsubsection{Analysis}
+\subsection{Analysis}
+SIMD instructions massively reduced the executed instruction count. As expected, 128-bit SIMD processing 4 floats per cycle reduced instructions by approximately $4.4\times$, while 256-bit SIMD processing 8 floats reduced instructions by an impressive $8.3\times$. This corresponds closely to the theoretical maximums.
 
-\TODO{Discuss instruction-count reduction, speedup, SIMD width effects,
-and limiting factors.}
+Interestingly, while 256-bit SIMD halved the instructions compared to 128-bit, the raw speedup didn't strictly double. At a $1024 \times 1024$ image size, 256-bit only offered a marginal speedup advantage over 128-bit ($7.74\times$ vs $7.10\times$). This indicates that at high instruction-level parallelism, the CPU becomes heavily bound by memory bandwidth (the L1 cache latency) rather than pure arithmetic throughput. 
 
-\subsubsection{Questions}
+\subsection{Questions}
 
 \begin{enumerate}
-    \item How did the instruction count change?
-    \item Did you achieve speedup? Why?
-    \item Which SIMD intrinsics were used and why?
+    \item \textbf{How did the instruction count change?} \\
+    The instruction count plummeted precisely in line with the vector widths: 128-bit SIMD divided instructions by $\sim$4.4, and 256-bit divided them by $\sim$8.3 compared to the naive baseline.
+    \item \textbf{Did you achieve speedup? Why?} \\
+    Yes, a massive speedup of around $7\times$ to $8\times$ was achieved. This was almost entirely due to data parallelism (fused multiply-add computing multiple pixels per cycle) and the drastic reduction in loop maintenance branch instructions.
+    \item \textbf{Which SIMD intrinsics were used and why?} \\
+    We primarily used \texttt{\_mm256\_loadu\_ps} for unaligned memory reads, \texttt{\_mm256\_set1\_ps} to broadcast scalar weights to all vector lanes, and \texttt{\_mm256\_fmadd\_ps} to execute the core accumulation mathematically efficiently. Unaligned load/stores were necessary because of the overlapping nature of 2D sliding windows .
 \end{enumerate}
-
-\TODO{Answer all questions.}
