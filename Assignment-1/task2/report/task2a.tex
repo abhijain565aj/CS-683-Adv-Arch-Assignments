@@ -7,34 +7,63 @@
 \subsection{Experimental Setup}
 
 \begin{itemize}
-    \item CPU: \TODO{...}
-    \item Matrix dimensions: \TODO{...}
-    \item Prefetch distances: \TODO{...}
-    \item Cache fill levels: \TODO{T0/T1/T2/NTA/...}
-    \item Performance counters: \TODO{...}
-    \item Number of runs: \TODO{...}
+    \item CPU: Intel x86 architecture (Tested on HP Pavilion Laptop)
+    \item Matrix dimensions: $128 \times 128$ to $2048 \times 2048$
+    \item Prefetch distances: 16, 64, 128, 256, and 512 floats
+    \item Cache fill levels: T0, T1, T2, NTA
+    \item Performance counters: \texttt{instructions}, \texttt{cpu\_core/L1D.REPLACEMENT/}, \texttt{l2\_rqsts.miss}, \texttt{LLC-load-misses}, \texttt{sw\_prefetch\_access.any}
+    \item Number of runs: 1 warmup, 3 timed repetitions
 \end{itemize}
 
 \subsection{Matrix Size Analysis}
 
-\TODO{Explain how software prefetching performance changes with matrix size.}
+As the matrix size increases from $128 \times 128$ up to $2048 \times 2048$, the performance of software prefetching strictly remains a regression (speedup $< 1.0$)[cite: 12]. However, the regression penalty lessens slightly at larger sizes. For a $128 \times 128$ matrix, the speedup is roughly $0.76\times$, while at $2048 \times 2048$, it recovers to $\sim 0.90\times$[cite: 12]. This occurs because without SIMD, the inner matrix multiplication kernel is heavily compute-bound (scalar instructions). Adding software prefetch instructions pollutes the instruction pipeline and adds overhead without accelerating the arithmetic FPU bottleneck.
 
 \subsection{CPU Metrics}
 
 \begin{table}[H]
 \centering
-\caption{Task 2A CPU metrics}
+\caption{Task 2A CPU metrics (Best Configs per Size, HW Prefetch ON)}
 \begin{tabular}{lccccccc}
 \toprule
-Size & Distance & Level & L1D & L2 & LLC & SW Prefetch & Time \\
+Size & Distance & Level & L1D Miss (M) & L2 Miss (M) & LLC Miss & SW Prefetch (M) & Time (ms) \\
 \midrule
-\TODO{...} & \TODO{...} & \TODO{...} &
-\TODO{...} & \TODO{...} & \TODO{...} & \TODO{...} & \TODO{...} \\
+128 & 128 & T1 & 0.88 & 0.17 & 5002 & 0.03 & 0.90 \\
+512 & 512 & NTA & 8.02 & 0.27 & 991 & 0.00 & 63.60 \\
+1024 & 16 & T0 & 64.26 & 2.83 & 1,821 & 134.22 & 510.81 \\
+2048 & 64 & T0 & 544.40 & 26.41 & 15,303 & 1055.98 & 4151.35 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\evidencebox{Paste representative perf output here.}
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/task2a/task2a_l1d_misses_vs_distance.png}
+        \caption{L1D Misses vs Prefetch Distance}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/task2a/task2a_l2_misses_vs_distance.png}
+        \caption{L2 Misses vs Prefetch Distance}
+    \end{subfigure}
+    
+    \vspace{1em}
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/task2a/task2a_llc_misses_vs_distance.png}
+        \caption{LLC Misses vs Prefetch Distance}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/task2a/task2a_sw_prefetch_access_vs_distance.png}
+        \caption{SW Prefetch Accesses vs Distance}
+    \end{subfigure}
+    \caption{Hardware cache metrics behavior under varying prefetch distances.}
+\end{figure}
 
 \subsection{Execution Time and Speedup}
 
@@ -46,41 +75,66 @@ Size & Distance & Level & L1D & L2 & LLC & SW Prefetch & Time \\
 
 \begin{table}[H]
 \centering
-\caption{Software prefetching speedup}
+\caption{Software prefetching speedup (HW Prefetch ON)}
 \begin{tabular}{lccc}
 \toprule
-Matrix Size & No Prefetch & Prefetch & Speedup \\
+Matrix Size & No Prefetch (ms) & Prefetch (ms) & Speedup \\
 \midrule
-\TODO{...} & \TODO{...} & \TODO{...} & \TODO{...} \\
+$128 \times 128$ & 0.68 & 0.90 & 0.7586$\times$ \\
+$256 \times 256$ & 6.22 & 7.58 & 0.8197$\times$ \\
+$512 \times 512$ & 53.39 & 63.60 & 0.8395$\times$ \\
+$1024 \times 1024$ & 444.36 & 510.81 & 0.8699$\times$ \\
+$2048 \times 2048$ & 3728.33 & 4151.35 & 0.8981$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{figure}[H]
 \centering
-% \includegraphics[width=0.90\linewidth]{plots/task2_prefetch_speedup_vs_size.png}
+\includegraphics[width=0.75\linewidth]{plots/task2a/task2a_speedup_vs_size.png}
 \caption{Software prefetching speedup vs. matrix size.}
 \end{figure}
 
 \subsection{Prefetch Distance}
 
-\TODO{Analyze the effect of prefetch distance.}
+The prefetch distance determines how far ahead the CPU attempts to fetch memory into the cache. Across all matrix sizes evaluated, a prefetch distance of 256 floats (16 cache lines) yielded the best geometric mean performance[cite: 12]. If the distance is too small, data arrives too late, stalling the CPU. If the distance is too large, the data arrives too early and causes cache pollution, which is visible in the slight spike in LLC misses at extremely high prefetch distances.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\linewidth]{plots/task2a/task2a_prefetch_distance.png}
+\caption{Speedup over baseline across varying prefetch distances.}
+\end{figure}
 
 \subsection{Cache Fill Level}
 
-\TODO{Analyze the effect of T0/T1/T2/NTA or the levels actually tested.}
+The cache fill level dictates which level of the cache hierarchy the prefetched data is loaded into. Taking the geometric mean across all matrix sizes, the \texttt{T0} level (fetching data into all cache levels, including L1) provided the best overall results[cite: 12]. \texttt{NTA} (non-temporal) often performed worse on larger workloads because matrix multiplication naturally reuses cached data extensively, meaning bypassing the inner caches forces redundant fetches.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\linewidth]{plots/task2a/task2a_prefetch_level.png}
+\caption{Speedup over baseline across varying cache fill levels.}
+\end{figure}
 
 \subsection{Hardware Prefetchers}
 
-\TODO{Describe the enabled/disabled hardware-prefetcher experiments and
-their effect on performance.}
+We also evaluated performance with the CPU's hardware prefetchers explicitly turned off. As shown in Figure \ref{fig:hw_prefetch}, the software prefetching speedup with HW prefetchers OFF closely mirrored the ON state, peaking at roughly $0.905\times$ for a $2048 \times 2048$ matrix[cite: 12]. This confirms that in a purely compute-bound (non-SIMD) scalar loop, bypassing or aiding the hardware prefetcher provides no measurable relief because the bottleneck is raw FPU execution, not memory latency.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\linewidth]{plots/task2a/task2a_hw_prefetch_on_off.png}
+\caption{Hardware prefetcher ON vs OFF comparison.}
+\label{fig:hw_prefetch}
+\end{figure}
 
 \subsection{Questions}
 
 \begin{enumerate}
-    \item What trend is observed in speedup with matrix size?
-    \item What is the best prefetch distance?
-    \item At what cache fill level is maximum speedup achieved?
+    \item \textbf{What trend is observed in speedup with matrix size?} \\
+    The speedup strictly remains below $1.0\times$ (a performance regression). It improves slightly from roughly $0.76\times$ at $N=128$ to roughly $0.90\times$ at $N=2048$, indicating that the overhead of issuing the prefetch instructions dilutes slightly as memory bandwidth constraints grow, but it never offsets the compute bottleneck of the scalar code[cite: 12].
+    
+    \item \textbf{What is the best prefetch distance?} \\
+    Based on the geometric mean across all evaluated sizes, a prefetch distance of 256 floats (16 cache lines) was the optimal configuration[cite: 12].
+    
+    \item \textbf{At what cache fill level is maximum speedup achieved?} \\
+    The \texttt{T0} cache fill level achieved the maximum geometric mean speedup, as it actively pulls data into the L1 data cache where the FPU can access it immediately[cite: 12].
 \end{enumerate}
-
-\TODO{Answer all questions with numerical evidence.}
