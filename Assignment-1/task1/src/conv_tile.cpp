@@ -8,12 +8,14 @@ void conv_tile(const float* in, float* out, const float* ker,
     const int p = K / 2;
     const int in_stride = W + 2 * p;  // padded row stride
     int sz=32;
-    for (int oyT=0; oyT < H/sz; ++oyT)
+    for (int oyT=0; oyT < H; oyT+=sz)
     {
-        for (int oxT=0; oxT < W/sz; ++oxT)
+        int oyEnd = (oyT + sz < H) ? oyT + sz : H;
+        for (int oxT=0; oxT < W; oxT+=sz)
         {
-            for (int oy = oyT*sz; oy < (oyT+1)*sz; ++oy) {
-                for (int ox = oxT*sz; ox < (oxT+1)*sz; ++ox) {
+            int oxEnd = (oxT + sz < W) ? oxT + sz : W;
+            for (int oy = oyT; oy < oyEnd; ++oy) {
+                for (int ox = oxT; ox < oxEnd; ++ox) {
                     float acc = 0.0f;
                     for (int ky = 0; ky < K; ++ky) {
                         for (int kx = 0; kx < K; ++kx) {
