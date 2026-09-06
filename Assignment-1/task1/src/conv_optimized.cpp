@@ -1,6 +1,17 @@
 // conv_optimized.cpp  STAGE 5: PUT IT ALL TOGETHER
-// Hint: measure after every change. Not every "optimization" helps  let the numbers,
-// not intuition, decide.
+//
+// Assumptions:
+//   - K is odd
+//   - W is a multiple of 8
+//
+// Combines:
+//   - cache tiling
+//   - loop reordering
+//   - AVX2
+//   - FMA
+//   - kx unrolling by 2
+//   - multiple independent accumulators
+
 #include <immintrin.h>
 
 #include "convolution.h"
@@ -13,120 +24,207 @@ void conv_optimized(const float* __restrict in,
     const int p = K / 2;
     const int in_stride = W + 2 * p;
 
-    for (int oy = 0; oy < H; ++oy) {
+    const int TILE = 32;
 
-        for (int ox = 0; ox < W; ox += 8) {
+    for (int oyT = 0; oyT < H; oyT += TILE) {
 
-            __m256 acc = _mm256_setzero_ps();
+        const int oyEnd =
+            (oyT + TILE < H) ? oyT + TILE : H;
 
-            for (int ky = 0; ky < K - 1; ky += 2) {
+        for (int oxT = 0; oxT < W; oxT += TILE) {
 
-                const float* row0 =
-                    in + (oy + ky) * in_stride + ox;
+            const int oxEnd =
+                (oxT + TILE < W) ? oxT + TILE : W;
 
-                const float* row1 =
-                    in + (oy + ky + 1) * in_stride + ox;
+            /*
+             * Process 4 output rows together.
+             *
+             * Each accumulator contains 8 output pixels.
+             */
+            int oy = oyT;
 
-                const float* ker0 =
-                    ker + ky * K;
+            for (; oy + 3 < oyEnd; oy += 4) {
 
-                const float* ker1 =
-                    ker + (ky + 1) * K;
+                for (int ox = oxT; ox < oxEnd; ox += 8) {
 
-                for (int kx = 0; kx < K - 1; kx += 2) {
+                    __m256 acc0 = _mm256_setzero_ps();
+                    __m256 acc1 = _mm256_setzero_ps();
+                    __m256 acc2 = _mm256_setzero_ps();
+                    __m256 acc3 = _mm256_setzero_ps();
 
-                    __m256 x00 =
-                        _mm256_loadu_ps(row0 + kx);
+                    /*
+                     * Loop order:
+                     *
+                     *   ky
+                     *     kx
+                     *       oy
+                     *         ox
+                     *
+                     * We are doing the 4 oy values simultaneously
+                     * inside the vectorized x loop.
+                     */
+                    for (int ky = 0; ky < K; ++ky) {
 
-                    __m256 x01 =
-                        _mm256_loadu_ps(row0 + kx + 1);
+                        const float* row0 =
+                            in + (oy + ky) * in_stride + ox;
 
-                    __m256 x10 =
-                        _mm256_loadu_ps(row1 + kx);
+                        const float* row1 =
+                            in + (oy + 1 + ky) * in_stride + ox;
 
-                    __m256 x11 =
-                        _mm256_loadu_ps(row1 + kx + 1);
+                        const float* row2 =
+                            in + (oy + 2 + ky) * in_stride + ox;
 
-                    __m256 w00 =
-                        _mm256_set1_ps(ker0[kx]);
+                        const float* row3 =
+                            in + (oy + 3 + ky) * in_stride + ox;
 
-                    __m256 w01 =
-                        _mm256_set1_ps(ker0[kx + 1]);
+                        const float* krow =
+                            ker + ky * K;
 
-                    __m256 w10 =
-                        _mm256_set1_ps(ker1[kx]);
+                        /*
+                         * Unroll kx by 2.
+                         *
+                         * Since K is odd:
+                         *   0,2,4,...,K-3
+                         * followed by K-1.
+                         */
+                        int kx = 0;
 
-                    __m256 w11 =
-                        _mm256_set1_ps(ker1[kx + 1]);
+                        for (; kx < K - 1; kx += 2) {
 
-                    acc = _mm256_fmadd_ps(x00, w00, acc);
-                    acc = _mm256_fmadd_ps(x01, w01, acc);
+                            const __m256 w0 =
+                                _mm256_set1_ps(krow[kx]);
 
-                    acc = _mm256_fmadd_ps(x10, w10, acc);
-                    acc = _mm256_fmadd_ps(x11, w11, acc);
-                }
+                            const __m256 w1 =
+                                _mm256_set1_ps(krow[kx + 1]);
 
-                {
-                    const int kx = K - 1;
+                            /*
+                             * First kernel column.
+                             */
+                            const __m256 x00 =
+                                _mm256_loadu_ps(row0 + kx);
 
-                    __m256 x0 =
-                        _mm256_loadu_ps(row0 + kx);
+                            const __m256 x10 =
+                                _mm256_loadu_ps(row1 + kx);
 
-                    __m256 x1 =
-                        _mm256_loadu_ps(row1 + kx);
+                            const __m256 x20 =
+                                _mm256_loadu_ps(row2 + kx);
 
-                    __m256 w0 =
-                        _mm256_set1_ps(ker0[kx]);
+                            const __m256 x30 =
+                                _mm256_loadu_ps(row3 + kx);
 
-                    __m256 w1 =
-                        _mm256_set1_ps(ker1[kx]);
+                            acc0 = _mm256_fmadd_ps(x00, w0, acc0);
+                            acc1 = _mm256_fmadd_ps(x10, w0, acc1);
+                            acc2 = _mm256_fmadd_ps(x20, w0, acc2);
+                            acc3 = _mm256_fmadd_ps(x30, w0, acc3);
 
-                    acc = _mm256_fmadd_ps(x0, w0, acc);
-                    acc = _mm256_fmadd_ps(x1, w1, acc);
+                            /*
+                             * Second kernel column.
+                             */
+                            const __m256 x01 =
+                                _mm256_loadu_ps(row0 + kx + 1);
+
+                            const __m256 x11 =
+                                _mm256_loadu_ps(row1 + kx + 1);
+
+                            const __m256 x21 =
+                                _mm256_loadu_ps(row2 + kx + 1);
+
+                            const __m256 x31 =
+                                _mm256_loadu_ps(row3 + kx + 1);
+
+                            acc0 = _mm256_fmadd_ps(x01, w1, acc0);
+                            acc1 = _mm256_fmadd_ps(x11, w1, acc1);
+                            acc2 = _mm256_fmadd_ps(x21, w1, acc2);
+                            acc3 = _mm256_fmadd_ps(x31, w1, acc3);
+                        }
+
+                        /*
+                         * Remaining kx = K - 1.
+                         */
+                        const __m256 w =
+                            _mm256_set1_ps(krow[K - 1]);
+
+                        const __m256 x0 =
+                            _mm256_loadu_ps(row0 + K - 1);
+
+                        const __m256 x1 =
+                            _mm256_loadu_ps(row1 + K - 1);
+
+                        const __m256 x2 =
+                            _mm256_loadu_ps(row2 + K - 1);
+
+                        const __m256 x3 =
+                            _mm256_loadu_ps(row3 + K - 1);
+
+                        acc0 = _mm256_fmadd_ps(x0, w, acc0);
+                        acc1 = _mm256_fmadd_ps(x1, w, acc1);
+                        acc2 = _mm256_fmadd_ps(x2, w, acc2);
+                        acc3 = _mm256_fmadd_ps(x3, w, acc3);
+                    }
+
+                    _mm256_storeu_ps(out + oy * W + ox,
+                                     acc0);
+
+                    _mm256_storeu_ps(out + (oy + 1) * W + ox,
+                                     acc1);
+
+                    _mm256_storeu_ps(out + (oy + 2) * W + ox,
+                                     acc2);
+
+                    _mm256_storeu_ps(out + (oy + 3) * W + ox,
+                                     acc3);
                 }
             }
 
-            {
-                const int ky = K - 1;
+            /*
+             * Handle remaining 1-3 rows inside the tile.
+             */
+            for (; oy < oyEnd; ++oy) {
 
-                const float* row =
-                    in + (oy + ky) * in_stride + ox;
+                for (int ox = oxT; ox < oxEnd; ox += 8) {
 
-                const float* krow =
-                    ker + ky * K;
+                    __m256 acc = _mm256_setzero_ps();
 
-                for (int kx = 0; kx < K - 1; kx += 2) {
+                    for (int ky = 0; ky < K; ++ky) {
 
-                    __m256 x0 =
-                        _mm256_loadu_ps(row + kx);
+                        const float* row =
+                            in + (oy + ky) * in_stride + ox;
 
-                    __m256 x1 =
-                        _mm256_loadu_ps(row + kx + 1);
+                        const float* krow =
+                            ker + ky * K;
 
-                    __m256 w0 =
-                        _mm256_set1_ps(krow[kx]);
+                        int kx = 0;
 
-                    __m256 w1 =
-                        _mm256_set1_ps(krow[kx + 1]);
+                        for (; kx < K - 1; kx += 2) {
 
-                    acc = _mm256_fmadd_ps(x0, w0, acc);
-                    acc = _mm256_fmadd_ps(x1, w1, acc);
-                }
+                            const __m256 w0 =
+                                _mm256_set1_ps(krow[kx]);
 
-                {
-                    const int kx = K - 1;
+                            const __m256 w1 =
+                                _mm256_set1_ps(krow[kx + 1]);
 
-                    __m256 x =
-                        _mm256_loadu_ps(row + kx);
+                            const __m256 x0 =
+                                _mm256_loadu_ps(row + kx);
 
-                    __m256 w =
-                        _mm256_set1_ps(krow[kx]);
+                            const __m256 x1 =
+                                _mm256_loadu_ps(row + kx + 1);
 
-                    acc = _mm256_fmadd_ps(x, w, acc);
+                            acc = _mm256_fmadd_ps(x0, w0, acc);
+                            acc = _mm256_fmadd_ps(x1, w1, acc);
+                        }
+
+                        const __m256 w =
+                            _mm256_set1_ps(krow[K - 1]);
+
+                        const __m256 x =
+                            _mm256_loadu_ps(row + K - 1);
+
+                        acc = _mm256_fmadd_ps(x, w, acc);
+                    }
+
+                    _mm256_storeu_ps(out + oy * W + ox, acc);
                 }
             }
-
-            _mm256_storeu_ps(out + oy * W + ox, acc);
         }
     }
 }
