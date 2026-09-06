@@ -22,17 +22,14 @@ void conv_tile(const float* in, float* out, const float* ker,
                 }
             }
 
-            for (int oy = oyT; oy < oyEnd; ++oy) {
-                for (int ky = 0; ky < K; ++ky)
+            for (int ky = 0; ky < K; ++ky)
+            {
+                for (int kx = 0; kx < K; ++kx)
                 {
-                    for (int kx = 0; kx < K; ++kx)
-                    {
-                        float weight = ker[ky * K + kx];
-
+                    float weight = ker[ky * K + kx];
+                    for (int oy = oyT; oy < oyEnd; ++oy) {
                         for (int ox = oxT; ox < oxEnd; ++ox) {
-                            out[oy * W + ox] +=
-                                in[(oy + ky) * in_stride + (ox + kx)]
-                                * weight;
+                            out[oy * W + ox] += in[(oy + ky) * in_stride + (ox + kx)] * weight;
                         }
                     }
                 }
