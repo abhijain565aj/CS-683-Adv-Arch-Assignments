@@ -19,9 +19,11 @@ void conv_reorder(const float* in, float* out, const float* ker,
     for (int oy = 0; oy < H; ++oy) {
         for (int ky = 0; ky < K; ++ky) {
             for (int ox = 0; ox < W; ++ox) {
+                float acc = 0.0;
                 for (int kx = 0; kx < K; ++kx) {
-                    out[oy * W + ox] += in[(oy + ky) * in_stride + (ox + kx)] * ker[ky * K + kx];
+                    acc += in[(oy + ky) * in_stride + (ox + kx)] * ker[ky * K + kx];
                 }
+                out[oy * W + ox] += acc;
             }
         }
     }
