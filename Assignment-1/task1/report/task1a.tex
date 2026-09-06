@@ -5,31 +5,22 @@
 \subsection{Task 1A: Loop Unrolling and Reordering}
 
 \subsubsection{Baseline}
-
-\TODO{Briefly describe the baseline implementation and relevant loop
-structure.}
+The baseline iterates over output dimensions (\texttt{oy}, \texttt{ox}) as the outer loops and kernel dimensions (\texttt{ky}, \texttt{kx}) as the inner loops, resulting in non-contiguous memory accesses and poor spatial locality.
 
 \subsubsection{Motivation}
-
-\TODO{What motivated the loop reordering and unrolling?}
+Loop reordering targets improved spatial cache locality by accessing the input matrix sequentially. Loop unrolling minimizes branch condition checks and index increment overhead, exposing instruction-level parallelism.
 
 \subsubsection{Design Considerations}
-
 \begin{itemize}
-    \item \TODO{Memory access pattern}
-    \item \TODO{Cache locality}
-    \item \TODO{Dependency considerations}
-    \item \TODO{Unrolling factor / loop ordering chosen}
+    \item \textbf{Memory access pattern:} Moving \texttt{ox} to the innermost loop ensures contiguous memory fetches (stride of 1).
+    \item \textbf{Cache locality:} Kernel values are cached in a register before the innermost loop, reducing L1 fetches.
+    \item \textbf{Unrolling factor:} \texttt{ox} was unrolled by a factor of 8 to maximize scalar accumulator use without register spilling, and \texttt{ky}/\texttt{kx} by 2.
 \end{itemize}
 
 \subsubsection{Implementation}
-
-\TODO{Describe exactly what was changed in the convolution function.}
-
-\smallevidencebox{Optional: code/output screenshot or relevant perf evidence.}
+For \texttt{conv\_reorder}, the loop hierarchy was inverted to \texttt{oy} $\rightarrow$ \texttt{ky} $\rightarrow$ \texttt{kx} $\rightarrow$ \texttt{ox}. For \texttt{conv\_unroll}, the innermost spatial loop steps by 8, accumulating in parallel into eight scalar variables, while kernel loops step by 2 with edge-case handling.
 
 \subsubsection{Experimental Setup}
-
 \begin{table}[H]
 \centering
 \caption{Task 1A experimental setup}
@@ -37,40 +28,119 @@ structure.}
 \toprule
 Parameter & Value \\
 \midrule
-CPU & \TODO{CPU} \\
-Matrix sizes & \TODO{sizes} \\
-Kernel sizes & \TODO{sizes} \\
-Compiler & \TODO{compiler} \\
-Runs & \TODO{number} \\
+CPU & Intel x86 \\
+Matrix sizes & $512 \times 512$ to $8192 \times 8192$ \\
+Kernel sizes & 3, 5, 7, 9 \\
+Compiler & GCC (Baseline) \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsubsection{Results}
-
 \begin{table}[H]
 \centering
-\caption{Task 1A performance}
+\caption{Task 1A performance (K=5)}
 \begin{tabular}{lccc}
 \toprule
-Matrix Size & Baseline & Optimized & Speedup \\
+Matrix Size & Baseline Time (ms) & Reorder Speedup & Unroll Speedup \\
 \midrule
-\TODO{...} & \TODO{...} & \TODO{...} & \TODO{...} \\
+$512 \times 512$ & 2.97 & 1.97$\times$ & 3.80$\times$ \\
+$1024 \times 1024$ & 11.69 & 1.98$\times$ & 3.80$\times$ \\
+$2048 \times 2048$ & 46.75 & 1.84$\times$ & 3.67$\times$ \\
+$4096 \times 4096$ & 188.77 & 1.88$\times$ & 3.83$\times$ \\
+$8192 \times 8192$ & 839.46 & 1.77$\times$ & 3.87$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsubsection{Analysis}
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/reorder_vs_naive_speedup_image_size_k5.png}
+        \caption{Reorder: Speedup vs. Image Size ($K=5$)}
+        \label{fig:reorder_speedup_size}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/reorder_vs_naive_speedup_kernel_size_2048.png}
+        \caption{Reorder: Speedup vs. Kernel Size ($2048 \times 2048$)}
+        \label{fig:reorder_speedup_kernel}
+    \end{subfigure}
+    
+    \vspace{1em}
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/unroll_vs_naive_speedup_image_size_k5.png}
+        \caption{Unroll: Speedup vs. Image Size ($K=5$)}
+        \label{fig:unroll_speedup_size}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/unroll_vs_naive_speedup_kernel_size_2048.png}
+        \caption{Unroll: Speedup vs. Kernel Size ($2048 \times 2048$)}
+        \label{fig:unroll_speedup_kernel}
+    \end{subfigure}
+    \caption{Speedup performance comparisons against the naive baseline.}
+    \label{fig:task1a_speedups}
+\end{figure}
 
-\TODO{Explain why performance improved/degraded and identify the relevant
-hardware-level reasons.}
+\subsubsection{Analysis}
+Reordering yielded nearly a 2$\times$ speedup by making \texttt{ox} the innermost loop, heavily utilizing fetched cache lines via spatial locality. Unrolling resulted in an almost 4$\times$ speedup; this was driven by a massive reduction in loop maintenance overhead. 
+
+As shown in Figure~\ref{fig:task1a_metrics}, unrolling drops instruction counts from $\sim$1.31 billion (naive) to $\sim$359 million (unrolled) for a $512 \times 512$ matrix. The total instruction counts for loop reordering remained comparable to the naive baseline (since the operations are identical, just reordered), proving that its speedup is strictly from cache hardware efficiency rather than instruction reduction.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/reorder_vs_naive_instructions_image_size_k5.png}
+        \caption{Reorder: Instructions vs. Image Size ($K=5$)}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/reorder_vs_naive_instructions_kernel_size_2048.png}
+        \caption{Reorder: Instructions vs. Kernel Size ($2048 \times 2048$)}
+    \end{subfigure}
+    
+    \vspace{1em}
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/unroll_vs_naive_instructions_image_size_k5.png}
+        \caption{Unroll: Instructions vs. Image Size ($K=5$)}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/unroll_vs_naive_instructions_kernel_size_2048.png}
+        \caption{Unroll: Instructions vs. Kernel Size ($2048 \times 2048$)}
+    \end{subfigure}
+
+    \vspace{1em}
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/unroll_vs_naive_branches_image_size_k5.png}
+        \caption{Unroll: Branches vs. Image Size ($K=5$)}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plots/unroll_vs_naive_branches_kernel_size_2048.png}
+        \caption{Unroll: Branches vs. Kernel Size ($2048 \times 2048$)}
+    \end{subfigure}
+    \caption{Hardware instruction and branch metrics demonstrating loop overhead reduction.}
+    \label{fig:task1a_metrics}
+\end{figure}
 
 \subsubsection{Questions}
-
 \begin{enumerate}
-    \item What motivated you to make changes to the code?
-    \item What considerations did you take into account?
-    \item How effective were the changes? Which metric was used and why?
+    \item \textbf{What motivated you to make changes to the code?} \\
+    To eliminate redundant branch instructions and fix the poor memory stride of the baseline code.
+    \item \textbf{What considerations did you take into account?} \\
+    I prioritized contiguous spatial memory access (reordering) and balanced the unroll factor (8 for spatial width) to fully utilize registers without spilling.
+    \item \textbf{How effective were the changes? Which metric was used and why?} \\
+    Highly effective (up to 3.87$\times$ speedup). Execution time was used for raw performance, while instruction counts and branch misses were used to prove unrolling's effectiveness in reducing loop overhead.
 \end{enumerate}
-
-\TODO{Answer the questions above.}
