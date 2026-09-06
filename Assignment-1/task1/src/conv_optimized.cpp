@@ -36,11 +36,6 @@ void conv_optimized(const float* __restrict in,
             const int oxEnd =
                 (oxT + TILE < W) ? oxT + TILE : W;
 
-            /*
-             * Process 4 output rows together.
-             *
-             * Each accumulator contains 8 output pixels.
-             */
             int oy = oyT;
 
             for (; oy + 3 < oyEnd; oy += 4) {
