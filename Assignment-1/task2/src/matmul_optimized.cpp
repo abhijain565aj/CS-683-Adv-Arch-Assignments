@@ -1,11 +1,10 @@
-// matmul_optimized.cpp  STAGE 3: PUT IT ALL TOGETHER
+// matmul_optimized.cpp
+// Stage 3: combined optimizations
 //
-// This is the graded function AND the kernel that gets injected into llama.cpp. Combine
-// everything you have learned across the whole assignment  loop reordering, register
-// blocking and unrolling (Task 1 / Stage 1 here), cache tiling and software prefetch
-// (Stage 2)  and TUNE it to be as fast as you can. Your speedup over matmul_naive determines
-// your score (see the tier table the harness prints), and this same function will power a
-// real LLM inference via `make llama-demo`.
+// Changes in this version:
+//   1. j micro-tiles are outside i micro-tiles for better B-row reuse.
+//   2. B software prefetches are removed; only A rows are prefetched.
+//   3. The main K loop is manually unrolled to 32 floats (4 AVX2 vectors).
 
 #include <immintrin.h>
 
@@ -29,19 +28,22 @@ void matmul_optimized(const float* A, const float* B, float* C,
     const int prefetch_distance = 64;
 
     for (int ii = 0; ii < M; ii += BM) {
-        int i_end = (ii + BM < M) ? ii + BM : M;
+        const int i_end = (ii + BM < M) ? ii + BM : M;
+
         for (int jj = 0; jj < N; jj += BN) {
-            int j_end = (jj + BN < N) ? jj + BN : N;
-            int i;
-            for (i = ii; i + 1 < i_end; i += 2) {
-                const float* a0 = A + static_cast<long>(i) * lda;
-                const float* a1 = A + static_cast<long>(i + 1) * lda;
-                int j;
-                for (j = jj; j + 3 < j_end; j += 4) {
-                    const float* b0 = B + static_cast<long>(j) * ldb;
-                    const float* b1 = B + static_cast<long>(j + 1) * ldb;
-                    const float* b2 = B + static_cast<long>(j + 2) * ldb;
-                    const float* b3 = B + static_cast<long>(j + 3) * ldb;
+            const int j_end = (jj + BN < N) ? jj + BN : N;
+
+            int j;
+            for (j = jj; j + 3 < j_end; j += 4) {
+                const float* b0 = B + static_cast<long>(j) * ldb;
+                const float* b1 = B + static_cast<long>(j + 1) * ldb;
+                const float* b2 = B + static_cast<long>(j + 2) * ldb;
+                const float* b3 = B + static_cast<long>(j + 3) * ldb;
+
+                int i;
+                for (i = ii; i + 1 < i_end; i += 2) {
+                    const float* a0 = A + static_cast<long>(i) * lda;
+                    const float* a1 = A + static_cast<long>(i + 1) * lda;
 
                     __m256 acc00 = _mm256_setzero_ps();
                     __m256 acc01 = _mm256_setzero_ps();
@@ -52,73 +54,116 @@ void matmul_optimized(const float* A, const float* B, float* C,
                     __m256 acc12 = _mm256_setzero_ps();
                     __m256 acc13 = _mm256_setzero_ps();
 
-                    int p;
-                    for (p = 0; p + 15 < K; p += 16) {
+                    int p = 0;
+
+                    for (; p + 31 < K; p += 32) {
                         if (p + prefetch_distance < K) {
-                            _mm_prefetch(reinterpret_cast<const char*>(b0 + p + prefetch_distance), _MM_HINT_T0);
-                            _mm_prefetch(reinterpret_cast<const char*>(b1 + p + prefetch_distance), _MM_HINT_T0);
-                            _mm_prefetch(reinterpret_cast<const char*>(b2 + p + prefetch_distance), _MM_HINT_T0);
-                            _mm_prefetch(reinterpret_cast<const char*>(b3 + p + prefetch_distance), _MM_HINT_T0);
+                            _mm_prefetch(
+                                reinterpret_cast<const char*>(
+                                    a0 + p + prefetch_distance),
+                                _MM_HINT_T0);
+                            _mm_prefetch(
+                                reinterpret_cast<const char*>(
+                                    a1 + p + prefetch_distance),
+                                _MM_HINT_T0);
                         }
 
                         __m256 a0_vec = _mm256_loadu_ps(a0 + p);
                         __m256 a1_vec = _mm256_loadu_ps(a1 + p);
 
-                        __m256 b0_vec = _mm256_loadu_ps(b0 + p);
-                        acc00 = _mm256_fmadd_ps(a0_vec, b0_vec, acc00);
-                        acc10 = _mm256_fmadd_ps(a1_vec, b0_vec, acc10);
+                        __m256 b_vec = _mm256_loadu_ps(b0 + p);
+                        acc00 = _mm256_fmadd_ps(a0_vec, b_vec, acc00);
+                        acc10 = _mm256_fmadd_ps(a1_vec, b_vec, acc10);
 
-                        __m256 b1_vec = _mm256_loadu_ps(b1 + p);
-                        acc01 = _mm256_fmadd_ps(a0_vec, b1_vec, acc01);
-                        acc11 = _mm256_fmadd_ps(a1_vec, b1_vec, acc11);
+                        b_vec = _mm256_loadu_ps(b1 + p);
+                        acc01 = _mm256_fmadd_ps(a0_vec, b_vec, acc01);
+                        acc11 = _mm256_fmadd_ps(a1_vec, b_vec, acc11);
 
-                        __m256 b2_vec = _mm256_loadu_ps(b2 + p);
-                        acc02 = _mm256_fmadd_ps(a0_vec, b2_vec, acc02);
-                        acc12 = _mm256_fmadd_ps(a1_vec, b2_vec, acc12);
+                        b_vec = _mm256_loadu_ps(b2 + p);
+                        acc02 = _mm256_fmadd_ps(a0_vec, b_vec, acc02);
+                        acc12 = _mm256_fmadd_ps(a1_vec, b_vec, acc12);
 
-                        __m256 b3_vec = _mm256_loadu_ps(b3 + p);
-                        acc03 = _mm256_fmadd_ps(a0_vec, b3_vec, acc03);
-                        acc13 = _mm256_fmadd_ps(a1_vec, b3_vec, acc13);
+                        b_vec = _mm256_loadu_ps(b3 + p);
+                        acc03 = _mm256_fmadd_ps(a0_vec, b_vec, acc03);
+                        acc13 = _mm256_fmadd_ps(a1_vec, b_vec, acc13);
 
                         a0_vec = _mm256_loadu_ps(a0 + p + 8);
                         a1_vec = _mm256_loadu_ps(a1 + p + 8);
 
-                        b0_vec = _mm256_loadu_ps(b0 + p + 8);
-                        acc00 = _mm256_fmadd_ps(a0_vec, b0_vec, acc00);
-                        acc10 = _mm256_fmadd_ps(a1_vec, b0_vec, acc10);
+                        b_vec = _mm256_loadu_ps(b0 + p + 8);
+                        acc00 = _mm256_fmadd_ps(a0_vec, b_vec, acc00);
+                        acc10 = _mm256_fmadd_ps(a1_vec, b_vec, acc10);
 
-                        b1_vec = _mm256_loadu_ps(b1 + p + 8);
-                        acc01 = _mm256_fmadd_ps(a0_vec, b1_vec, acc01);
-                        acc11 = _mm256_fmadd_ps(a1_vec, b1_vec, acc11);
+                        b_vec = _mm256_loadu_ps(b1 + p + 8);
+                        acc01 = _mm256_fmadd_ps(a0_vec, b_vec, acc01);
+                        acc11 = _mm256_fmadd_ps(a1_vec, b_vec, acc11);
 
-                        b2_vec = _mm256_loadu_ps(b2 + p + 8);
-                        acc02 = _mm256_fmadd_ps(a0_vec, b2_vec, acc02);
-                        acc12 = _mm256_fmadd_ps(a1_vec, b2_vec, acc12);
+                        b_vec = _mm256_loadu_ps(b2 + p + 8);
+                        acc02 = _mm256_fmadd_ps(a0_vec, b_vec, acc02);
+                        acc12 = _mm256_fmadd_ps(a1_vec, b_vec, acc12);
 
-                        b3_vec = _mm256_loadu_ps(b3 + p + 8);
-                        acc03 = _mm256_fmadd_ps(a0_vec, b3_vec, acc03);
-                        acc13 = _mm256_fmadd_ps(a1_vec, b3_vec, acc13);
+                        b_vec = _mm256_loadu_ps(b3 + p + 8);
+                        acc03 = _mm256_fmadd_ps(a0_vec, b_vec, acc03);
+                        acc13 = _mm256_fmadd_ps(a1_vec, b_vec, acc13);
+
+                        a0_vec = _mm256_loadu_ps(a0 + p + 16);
+                        a1_vec = _mm256_loadu_ps(a1 + p + 16);
+
+                        b_vec = _mm256_loadu_ps(b0 + p + 16);
+                        acc00 = _mm256_fmadd_ps(a0_vec, b_vec, acc00);
+                        acc10 = _mm256_fmadd_ps(a1_vec, b_vec, acc10);
+
+                        b_vec = _mm256_loadu_ps(b1 + p + 16);
+                        acc01 = _mm256_fmadd_ps(a0_vec, b_vec, acc01);
+                        acc11 = _mm256_fmadd_ps(a1_vec, b_vec, acc11);
+
+                        b_vec = _mm256_loadu_ps(b2 + p + 16);
+                        acc02 = _mm256_fmadd_ps(a0_vec, b_vec, acc02);
+                        acc12 = _mm256_fmadd_ps(a1_vec, b_vec, acc12);
+
+                        b_vec = _mm256_loadu_ps(b3 + p + 16);
+                        acc03 = _mm256_fmadd_ps(a0_vec, b_vec, acc03);
+                        acc13 = _mm256_fmadd_ps(a1_vec, b_vec, acc13);
+
+                        a0_vec = _mm256_loadu_ps(a0 + p + 24);
+                        a1_vec = _mm256_loadu_ps(a1 + p + 24);
+
+                        b_vec = _mm256_loadu_ps(b0 + p + 24);
+                        acc00 = _mm256_fmadd_ps(a0_vec, b_vec, acc00);
+                        acc10 = _mm256_fmadd_ps(a1_vec, b_vec, acc10);
+
+                        b_vec = _mm256_loadu_ps(b1 + p + 24);
+                        acc01 = _mm256_fmadd_ps(a0_vec, b_vec, acc01);
+                        acc11 = _mm256_fmadd_ps(a1_vec, b_vec, acc11);
+
+                        b_vec = _mm256_loadu_ps(b2 + p + 24);
+                        acc02 = _mm256_fmadd_ps(a0_vec, b_vec, acc02);
+                        acc12 = _mm256_fmadd_ps(a1_vec, b_vec, acc12);
+
+                        b_vec = _mm256_loadu_ps(b3 + p + 24);
+                        acc03 = _mm256_fmadd_ps(a0_vec, b_vec, acc03);
+                        acc13 = _mm256_fmadd_ps(a1_vec, b_vec, acc13);
                     }
 
                     for (; p + 7 < K; p += 8) {
                         __m256 a0_vec = _mm256_loadu_ps(a0 + p);
                         __m256 a1_vec = _mm256_loadu_ps(a1 + p);
 
-                        __m256 b0_vec = _mm256_loadu_ps(b0 + p);
-                        acc00 = _mm256_fmadd_ps(a0_vec, b0_vec, acc00);
-                        acc10 = _mm256_fmadd_ps(a1_vec, b0_vec, acc10);
+                        __m256 b_vec = _mm256_loadu_ps(b0 + p);
+                        acc00 = _mm256_fmadd_ps(a0_vec, b_vec, acc00);
+                        acc10 = _mm256_fmadd_ps(a1_vec, b_vec, acc10);
 
-                        __m256 b1_vec = _mm256_loadu_ps(b1 + p);
-                        acc01 = _mm256_fmadd_ps(a0_vec, b1_vec, acc01);
-                        acc11 = _mm256_fmadd_ps(a1_vec, b1_vec, acc11);
+                        b_vec = _mm256_loadu_ps(b1 + p);
+                        acc01 = _mm256_fmadd_ps(a0_vec, b_vec, acc01);
+                        acc11 = _mm256_fmadd_ps(a1_vec, b_vec, acc11);
 
-                        __m256 b2_vec = _mm256_loadu_ps(b2 + p);
-                        acc02 = _mm256_fmadd_ps(a0_vec, b2_vec, acc02);
-                        acc12 = _mm256_fmadd_ps(a1_vec, b2_vec, acc12);
+                        b_vec = _mm256_loadu_ps(b2 + p);
+                        acc02 = _mm256_fmadd_ps(a0_vec, b_vec, acc02);
+                        acc12 = _mm256_fmadd_ps(a1_vec, b_vec, acc12);
 
-                        __m256 b3_vec = _mm256_loadu_ps(b3 + p);
-                        acc03 = _mm256_fmadd_ps(a0_vec, b3_vec, acc03);
-                        acc13 = _mm256_fmadd_ps(a1_vec, b3_vec, acc13);
+                        b_vec = _mm256_loadu_ps(b3 + p);
+                        acc03 = _mm256_fmadd_ps(a0_vec, b_vec, acc03);
+                        acc13 = _mm256_fmadd_ps(a1_vec, b_vec, acc13);
                     }
 
                     float sum00 = horizontal_sum(acc00);
@@ -131,8 +176,9 @@ void matmul_optimized(const float* A, const float* B, float* C,
                     float sum13 = horizontal_sum(acc13);
 
                     for (; p < K; ++p) {
-                        float a0_value = a0[p];
-                        float a1_value = a1[p];
+                        const float a0_value = a0[p];
+                        const float a1_value = a1[p];
+
                         sum00 += a0_value * b0[p];
                         sum01 += a0_value * b1[p];
                         sum02 += a0_value * b2[p];
@@ -153,27 +199,42 @@ void matmul_optimized(const float* A, const float* B, float* C,
                     C[static_cast<long>(i + 1) * ldc + j + 3] = sum13;
                 }
 
-                for (; j < j_end; ++j) {
-                    const float* b = B + static_cast<long>(j) * ldb;
-                    float acc0 = 0.0f;
-                    float acc1 = 0.0f;
+                // Remaining single row in this i tile.
+                for (; i < i_end; ++i) {
+                    const float* a = A + static_cast<long>(i) * lda;
+
+                    float sum0 = 0.0f;
+                    float sum1 = 0.0f;
+                    float sum2 = 0.0f;
+                    float sum3 = 0.0f;
+
                     for (int p = 0; p < K; ++p) {
-                        acc0 += a0[p] * b[p];
-                        acc1 += a1[p] * b[p];
+                        const float av = a[p];
+                        sum0 += av * b0[p];
+                        sum1 += av * b1[p];
+                        sum2 += av * b2[p];
+                        sum3 += av * b3[p];
                     }
-                    C[static_cast<long>(i) * ldc + j] = acc0;
-                    C[static_cast<long>(i + 1) * ldc + j] = acc1;
+
+                    C[static_cast<long>(i) * ldc + j] = sum0;
+                    C[static_cast<long>(i) * ldc + j + 1] = sum1;
+                    C[static_cast<long>(i) * ldc + j + 2] = sum2;
+                    C[static_cast<long>(i) * ldc + j + 3] = sum3;
                 }
             }
 
-            for (; i < i_end; ++i) {
-                const float* a = A + static_cast<long>(i) * lda;
-                for (int j = jj; j < j_end; ++j) {
-                    const float* b = B + static_cast<long>(j) * ldb;
+            // Remaining columns in this j tile.
+            for (; j < j_end; ++j) {
+                const float* b = B + static_cast<long>(j) * ldb;
+
+                for (int i = ii; i < i_end; ++i) {
+                    const float* a = A + static_cast<long>(i) * lda;
                     float acc = 0.0f;
+
                     for (int p = 0; p < K; ++p) {
                         acc += a[p] * b[p];
                     }
+
                     C[static_cast<long>(i) * ldc + j] = acc;
                 }
             }
