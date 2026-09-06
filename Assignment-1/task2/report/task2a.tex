@@ -17,7 +17,7 @@
 
 \subsection{Matrix Size Analysis}
 
-As the matrix size increases from $128 \times 128$ up to $2048 \times 2048$, the performance of software prefetching strictly remains a regression (speedup $< 1.0$)[cite: 12]. However, the regression penalty lessens slightly at larger sizes. For a $128 \times 128$ matrix, the speedup is roughly $0.76\times$, while at $2048 \times 2048$, it recovers to $\sim 0.90\times$[cite: 12]. This occurs because without SIMD, the inner matrix multiplication kernel is heavily compute-bound (scalar instructions). Adding software prefetch instructions pollutes the instruction pipeline and adds overhead without accelerating the arithmetic FPU bottleneck.
+As the matrix size increases from $128 \times 128$ up to $2048 \times 2048$, the performance of software prefetching strictly remains a regression (speedup $< 1.0$). However, the regression penalty lessens slightly at larger sizes. For a $128 \times 128$ matrix, the speedup is roughly $0.76\times$, while at $2048 \times 2048$, it recovers to $\sim 0.90\times$. This occurs because without SIMD, the inner matrix multiplication kernel is heavily compute-bound (scalar instructions). Adding software prefetch instructions pollutes the instruction pipeline and adds overhead without accelerating the arithmetic FPU bottleneck.
 
 \subsection{CPU Metrics}
 
@@ -97,7 +97,7 @@ $2048 \times 2048$ & 3728.33 & 4151.35 & 0.8981$\times$ \\
 
 \subsection{Prefetch Distance}
 
-The prefetch distance determines how far ahead the CPU attempts to fetch memory into the cache. Across all matrix sizes evaluated, a prefetch distance of 256 floats (16 cache lines) yielded the best geometric mean performance[cite: 12]. If the distance is too small, data arrives too late, stalling the CPU. If the distance is too large, the data arrives too early and causes cache pollution, which is visible in the slight spike in LLC misses at extremely high prefetch distances.
+The prefetch distance determines how far ahead the CPU attempts to fetch memory into the cache. Across all matrix sizes evaluated, a prefetch distance of 256 floats (16 cache lines) yielded the best geometric mean performance. If the distance is too small, data arrives too late, stalling the CPU. If the distance is too large, the data arrives too early and causes cache pollution, which is visible in the slight spike in LLC misses at extremely high prefetch distances.
 
 \begin{figure}[H]
 \centering
@@ -107,7 +107,7 @@ The prefetch distance determines how far ahead the CPU attempts to fetch memory 
 
 \subsection{Cache Fill Level}
 
-The cache fill level dictates which level of the cache hierarchy the prefetched data is loaded into. Taking the geometric mean across all matrix sizes, the \texttt{T0} level (fetching data into all cache levels, including L1) provided the best overall results[cite: 12]. \texttt{NTA} (non-temporal) often performed worse on larger workloads because matrix multiplication naturally reuses cached data extensively, meaning bypassing the inner caches forces redundant fetches.
+The cache fill level dictates which level of the cache hierarchy the prefetched data is loaded into. Taking the geometric mean across all matrix sizes, the \texttt{T0} level (fetching data into all cache levels, including L1) provided the best overall results. \texttt{NTA} (non-temporal) often performed worse on larger workloads because matrix multiplication naturally reuses cached data extensively, meaning bypassing the inner caches forces redundant fetches.
 
 \begin{figure}[H]
 \centering
@@ -117,7 +117,7 @@ The cache fill level dictates which level of the cache hierarchy the prefetched 
 
 \subsection{Hardware Prefetchers}
 
-We also evaluated performance with the CPU's hardware prefetchers explicitly turned off. As shown in Figure \ref{fig:hw_prefetch}, the software prefetching speedup with HW prefetchers OFF closely mirrored the ON state, peaking at roughly $0.905\times$ for a $2048 \times 2048$ matrix[cite: 12]. This confirms that in a purely compute-bound (non-SIMD) scalar loop, bypassing or aiding the hardware prefetcher provides no measurable relief because the bottleneck is raw FPU execution, not memory latency.
+We also evaluated performance with the CPU's hardware prefetchers explicitly turned off. As shown in Figure \ref{fig:hw_prefetch}, the software prefetching speedup with HW prefetchers OFF closely mirrored the ON state, peaking at roughly $0.905\times$ for a $2048 \times 2048$ matrix. This confirms that in a purely compute-bound (non-SIMD) scalar loop, bypassing or aiding the hardware prefetcher provides no measurable relief because the bottleneck is raw FPU execution, not memory latency.
 
 \begin{figure}[H]
 \centering
@@ -130,11 +130,11 @@ We also evaluated performance with the CPU's hardware prefetchers explicitly tur
 
 \begin{enumerate}
     \item \textbf{What trend is observed in speedup with matrix size?} \\
-    The speedup strictly remains below $1.0\times$ (a performance regression). It improves slightly from roughly $0.76\times$ at $N=128$ to roughly $0.90\times$ at $N=2048$, indicating that the overhead of issuing the prefetch instructions dilutes slightly as memory bandwidth constraints grow, but it never offsets the compute bottleneck of the scalar code[cite: 12].
+    The speedup strictly remains below $1.0\times$ (a performance regression). It improves slightly from roughly $0.76\times$ at $N=128$ to roughly $0.90\times$ at $N=2048$, indicating that the overhead of issuing the prefetch instructions dilutes slightly as memory bandwidth constraints grow, but it never offsets the compute bottleneck of the scalar code.
     
     \item \textbf{What is the best prefetch distance?} \\
-    Based on the geometric mean across all evaluated sizes, a prefetch distance of 256 floats (16 cache lines) was the optimal configuration[cite: 12].
+    Based on the geometric mean across all evaluated sizes, a prefetch distance of 256 floats (16 cache lines) was the optimal configuration.
     
     \item \textbf{At what cache fill level is maximum speedup achieved?} \\
-    The \texttt{T0} cache fill level achieved the maximum geometric mean speedup, as it actively pulls data into the L1 data cache where the FPU can access it immediately[cite: 12].
+    The \texttt{T0} cache fill level achieved the maximum geometric mean speedup, as it actively pulls data into the L1 data cache where the FPU can access it immediately.
 \end{enumerate}

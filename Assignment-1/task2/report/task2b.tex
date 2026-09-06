@@ -5,11 +5,11 @@
 \section{Task 2B: SIMD (Single Instruction Multiple Data)}
 
 \subsection{SIMD Implementation}
-To parallelize the SGEMM operation, we implemented a register-blocked SIMD micro-kernel using AVX2 intrinsics[cite: 14]. We unrolled the outer loops to compute a $2 \times 4$ block of the output matrix $C$ simultaneously[cite: 14]. For the inner dot-product loop across the $K$ dimension, we used \texttt{\_mm256\_loadu\_ps} to fetch 8 elements from both matrices and accumulated the results using \texttt{\_mm256\_fmadd\_ps}[cite: 14]. Finally, we implemented a \texttt{horizontal\_sum} helper function using vector extraction and addition to collapse the 8-lane accumulators into scalar values for the final output[cite: 14]. 
+To parallelize the SGEMM operation, we implemented a register-blocked SIMD micro-kernel using AVX2 intrinsics. We unrolled the outer loops to compute a $2 \times 4$ block of the output matrix $C$ simultaneously. For the inner dot-product loop across the $K$ dimension, we used \texttt{\_mm256\_loadu\_ps} to fetch 8 elements from both matrices and accumulated the results using \texttt{\_mm256\_fmadd\_ps}. Finally, we implemented a \texttt{horizontal\_sum} helper function using vector extraction and addition to collapse the 8-lane accumulators into scalar values for the final output. 
 
 \subsection{Performance and Instruction Analysis}
 
-As expected, vectorizing the dot product drastically reduced the number of executed instructions. For a $1024 \times 1024$ matrix, the baseline executed $\sim$6.46 billion instructions, whereas the 256-bit SIMD implementation required only $\sim$227 million instructions—a reduction by a factor of roughly $28\times$[cite: 13].
+As expected, vectorizing the dot product drastically reduced the number of executed instructions. For a $1024 \times 1024$ matrix, the baseline executed $\sim$6.46 billion instructions, whereas the 256-bit SIMD implementation required only $\sim$227 million instructions—a reduction by a factor of roughly $28\times$.
 
 \begin{table}[H]
 \centering
@@ -80,8 +80,8 @@ $2048 \times 2048$ & 3802.51 & 8.51$\times$ & 10.00$\times$ \\
 
 \begin{enumerate}
     \item \textbf{What trends do you observe in speedup for different combinations of matrix sizes and SIMD widths?} \\
-    The 256-bit SIMD implementation strictly outperforms the 128-bit implementation across all matrix sizes[cite: 13]. For both widths, the speedup peaks at smaller boundaries (e.g., $12.64\times$ at $N=128$) and gently degrades as the matrix size increases (dropping to $10.00\times$ at $N=2048$)[cite: 13]. This downward trend indicates that as the matrix footprint grows well beyond the L1/L2 cache capacities, memory bandwidth becomes the primary bottleneck, starving the highly efficient SIMD arithmetic units.
+    The 256-bit SIMD implementation strictly outperforms the 128-bit implementation across all matrix sizes. For both widths, the speedup peaks at smaller boundaries (e.g., $12.64\times$ at $N=128$) and gently degrades as the matrix size increases (dropping to $10.00\times$ at $N=2048$). This downward trend indicates that as the matrix footprint grows well beyond the L1/L2 cache capacities, memory bandwidth becomes the primary bottleneck, starving the highly efficient SIMD arithmetic units.
     
     \item \textbf{For which SIMD width do you achieve the maximum speedup?} \\
-    We achieved the maximum speedup using the 256-bit SIMD width[cite: 13]. It produced a geometric mean speedup of roughly $11.19\times$ across all sizes, compared to the 128-bit version which was consistently slower[cite: 13]. This maps directly to the hardware capability: 256-bit registers process 8 single-precision floats per instruction cycle, effectively doubling the raw arithmetic throughput over 128-bit SSE registers.
+    We achieved the maximum speedup using the 256-bit SIMD width. It produced a geometric mean speedup of roughly $11.19\times$ across all sizes, compared to the 128-bit version which was consistently slower. This maps directly to the hardware capability: 256-bit registers process 8 single-precision floats per instruction cycle, effectively doubling the raw arithmetic throughput over 128-bit SSE registers.
 \end{enumerate}
