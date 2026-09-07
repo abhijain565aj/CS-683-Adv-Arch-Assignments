@@ -75,5 +75,36 @@
 \newpage
 \input{task2c}
 
+\newpage
+% ============================================================
+% Results Across Machines
+% ============================================================
+\appendix
+% ============================================================
+% Results Across Machines
+% ============================================================
+\section{Results Across Machines}
 
+To evaluate the portability of our optimizations, we tested the autograder suite on a second machine. The alternative machine achieved a much higher relative speedup ($30.29\times$) than our primary test machine ($22.07\times$), easily clearing the tier to secure the maximum 70 speedup points.
+
+However, absolute execution times reveal our primary machine is substantially faster. It completed the \texttt{optimized} kernel in $21.486$ ms ($\sim100$ GFLOP/s), whereas the alternative machine took $34.174$ ms ($\sim62.8$ GFLOP/s).
+
+\subsection*{Why is the Speedup Higher on a Slower Machine?}
+
+The test harness calculates speedup as a relative metric ($\text{Speedup} = \frac{\text{Execution Time naive}}{\text{Execution Time optimized}}$). The alternative machine's massive $30.29\times$ speedup is primarily driven by its exceptionally poor performance on the scalar \texttt{naive} baseline ($1035$ ms vs. our machine's $474$ ms). 
+
+This ratio discrepancy highlights a few key architectural differences:
+\begin{itemize}
+    \item \textbf{Hardware Prefetchers:} If our primary machine has a more aggressive hardware prefetcher, it artificially elevates the unoptimized baseline's performance, shrinking the maximum achievable speedup gap.
+    \item \textbf{Cache Hierarchy:} The $1024 \times 1024$ default workload intentionally exceeds the L2 cache. A machine with smaller caches or lower bandwidth suffers severe thrashing on naive code, yielding a dramatic relative improvement once cache-blocking is applied.
+    \item \textbf{Scalar Execution Efficiency:} Our primary chip likely has superior scalar execution (e.g., higher clocks, better branch prediction), making its baseline much faster. Once SIMD makes both chips heavily compute- and memory-bound, the absolute gap narrows, but the relative ratio skews heavily in favor of the slower machine.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\linewidth]{plots/all_stages_on_different_chip.png} \\
+    \vspace{1em}
+    \includegraphics[width=0.85\linewidth]{plots/all_stages_on_our_chip.png}
+    \caption{Autograder outputs for $N=1024$. \textbf{Top:} Alternative machine reaching $30.29\times$ speedup. \textbf{Bottom:} Our machine reaching $22.07\times$ speedup, despite having higher absolute throughput.}
+\end{figure}
 \end{document}
