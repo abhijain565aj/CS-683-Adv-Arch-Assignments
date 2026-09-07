@@ -8,3 +8,7 @@ report/*
 */.venv/
 *.pyc
 */__pycache__
+
+task2/.task2a_build/
+task2/.task2b_build/
+task2/.task2c_build/
