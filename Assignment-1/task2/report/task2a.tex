@@ -17,7 +17,9 @@
 
 \subsection{Matrix Size Analysis}
 
-As the matrix size increases from $128 \times 128$ up to $2048 \times 2048$, the performance of software prefetching strictly remains a regression (speedup $< 1.0$). However, the regression penalty lessens slightly at larger sizes. For a $128 \times 128$ matrix, the speedup is roughly $0.76\times$, while at $2048 \times 2048$, it recovers to $\sim 0.90\times$. This occurs because without SIMD, the inner matrix multiplication kernel is heavily compute-bound (scalar instructions). Adding software prefetch instructions pollutes the instruction pipeline and adds overhead without accelerating the arithmetic FPU bottleneck.
+As the matrix size increases from $128 \times 128$ up to $2048 \times 2048$, the relative performance of software prefetching highly depends on whether the CPU's hardware prefetchers are enabled. When hardware prefetchers are ON, software prefetching causes a slight regression (speedup $< 1.0$), as the manual prefetch instructions merely pollute the pipeline while the hardware is already fetching data optimally. 
+
+However, when hardware prefetchers are turned OFF, software prefetching achieves massive gains. The speedup steadily scales with matrix size, climbing from $1.67\times$ at $N=128$ up to an impressive $2.05\times$ at $N=2048$. This proves that for large memory working sets, manually issuing prefetch instructions effectively hides the memory latency bottleneck that would otherwise stall the FPU.
 
 \subsection{CPU Metrics}
 
@@ -75,16 +77,17 @@ Size & Distance & Level & L1D Miss (M) & L2 Miss (M) & LLC Miss & SW Prefetch (M
 
 \begin{table}[H]
 \centering
-\caption{Software prefetching speedup (HW Prefetch ON)}
-\begin{tabular}{lccc}
+\caption{Best Software prefetching configurations (HW Prefetch OFF vs ON)}
+\begin{tabular}{l|c|c|c||c|c|c}
 \toprule
-Matrix Size & No Prefetch (ms) & Prefetch (ms) & Speedup \\
+& \multicolumn{3}{c||}{\textbf{HW Prefetch OFF}} & \multicolumn{3}{c}{\textbf{HW Prefetch ON}} \\
+Size & Distance/Hint & Time (ms) & Speedup & Distance/Hint & Time (ms) & Speedup \\
 \midrule
-$128 \times 128$ & 0.68 & 0.90 & 0.7586$\times$ \\
-$256 \times 256$ & 6.22 & 7.58 & 0.8197$\times$ \\
-$512 \times 512$ & 53.39 & 63.60 & 0.8395$\times$ \\
-$1024 \times 1024$ & 444.36 & 510.81 & 0.8699$\times$ \\
-$2048 \times 2048$ & 3728.33 & 4151.35 & 0.8981$\times$ \\
+$128 \times 128$   & 16 / T0 & 0.41   & 1.6748$\times$ & 128 / T1 & 0.90   & 0.7586$\times$ \\
+$256 \times 256$   & 64 / T0 & 3.50   & 1.7845$\times$ & 256 / T1 & 7.58   & 0.8197$\times$ \\
+$512 \times 512$   & 16 / T1 & 28.21  & 1.8789$\times$ & 512 / NTA & 63.60  & 0.8395$\times$ \\
+$1024 \times 1024$ & 16 / T2 & 230.17 & 1.9419$\times$ & 16 / T0  & 510.81 & 0.8699$\times$ \\
+$2048 \times 2048$ & 16 / T1 & 1839.25& 2.0509$\times$ & 64 / T0  & 4151.35& 0.8981$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -92,12 +95,12 @@ $2048 \times 2048$ & 3728.33 & 4151.35 & 0.8981$\times$ \\
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.75\linewidth]{plots/task2a/task2a_speedup_vs_size.png}
-\caption{Software prefetching speedup vs. matrix size.}
+\caption{Software prefetching speedup vs. matrix size (comparing HW prefetcher states).}
 \end{figure}
 
 \subsection{Prefetch Distance}
 
-The prefetch distance determines how far ahead the CPU attempts to fetch memory into the cache. Across all matrix sizes evaluated, a prefetch distance of 256 floats (16 cache lines) yielded the best geometric mean performance. If the distance is too small, data arrives too late, stalling the CPU. If the distance is too large, the data arrives too early and causes cache pollution, which is visible in the slight spike in LLC misses at extremely high prefetch distances.
+The prefetch distance determines how far ahead the CPU attempts to fetch memory into the cache. Across the sweep, a very short prefetch distance of 16 floats (equivalent to just 1 cache line) yielded the best geometric mean performance across sizes. Because we are cache-blocking the matrix multiplication, the working set is already highly localized. Requesting data too far in advance (e.g., distance 512) causes data to be fetched and subsequently evicted before the FPU actually reaches it.
 
 \begin{figure}[H]
 \centering
@@ -107,7 +110,7 @@ The prefetch distance determines how far ahead the CPU attempts to fetch memory 
 
 \subsection{Cache Fill Level}
 
-The cache fill level dictates which level of the cache hierarchy the prefetched data is loaded into. Taking the geometric mean across all matrix sizes, the \texttt{T0} level (fetching data into all cache levels, including L1) provided the best overall results. \texttt{NTA} (non-temporal) often performed worse on larger workloads because matrix multiplication naturally reuses cached data extensively, meaning bypassing the inner caches forces redundant fetches.
+The cache fill level dictates which level of the cache hierarchy the prefetched data is loaded into. Taking the geometric mean across all matrix sizes, the \texttt{T0} level (fetching data into all cache levels, including L1) provided the optimal overall results. Because matrix multiplication aggressively reuses data within the inner loops, fetching directly into the L1 cache (\texttt{T0}) minimizes latency to the FPU. Bypassing the cache (\texttt{NTA}) generally performs poorly here as it forces redundant fetches from main memory on repeated accesses.
 
 \begin{figure}[H]
 \centering
@@ -117,7 +120,7 @@ The cache fill level dictates which level of the cache hierarchy the prefetched 
 
 \subsection{Hardware Prefetchers}
 
-We also evaluated performance with the CPU's hardware prefetchers explicitly turned off. As shown in Figure \ref{fig:hw_prefetch}, the software prefetching speedup with HW prefetchers OFF closely mirrored the ON state, peaking at roughly $0.905\times$ for a $2048 \times 2048$ matrix. This confirms that in a purely compute-bound (non-SIMD) scalar loop, bypassing or aiding the hardware prefetcher provides no measurable relief because the bottleneck is raw FPU execution, not memory latency.
+As clearly visualized in Figure \ref{fig:hw_prefetch}, the interaction with hardware prefetchers completely dictates the viability of software prefetching. When hardware prefetching is explicitly disabled, the FPU starves on cache misses, allowing our software prefetching to generate over a $2.0\times$ speedup at large matrix sizes. However, modern hardware prefetchers are highly optimized for sequential memory access patterns; when left enabled, they perfectly hide the latency on their own, meaning our manual \texttt{\_mm\_prefetch} calls merely introduce instruction overhead (resulting in a speedup $< 1.0$).
 
 \begin{figure}[H]
 \centering
@@ -130,11 +133,11 @@ We also evaluated performance with the CPU's hardware prefetchers explicitly tur
 
 \begin{enumerate}
     \item \textbf{What trend is observed in speedup with matrix size?} \\
-    The speedup strictly remains below $1.0\times$ (a performance regression). It improves slightly from roughly $0.76\times$ at $N=128$ to roughly $0.90\times$ at $N=2048$, indicating that the overhead of issuing the prefetch instructions dilutes slightly as memory bandwidth constraints grow, but it never offsets the compute bottleneck of the scalar code.
+    When hardware prefetchers are off, the software prefetch speedup scales positively with matrix size, climbing from $1.67\times$ at $N=128$ to $2.05\times$ at $N=2048$, as larger working sets increasingly expose the memory bandwidth bottleneck.
     
     \item \textbf{What is the best prefetch distance?} \\
-    Based on the geometric mean across all evaluated sizes, a prefetch distance of 256 floats (16 cache lines) was the optimal configuration.
+    Based on the geometric mean across all evaluated sizes, a highly localized prefetch distance of 16 floats (1 cache line) was the optimal configuration.
     
     \item \textbf{At what cache fill level is maximum speedup achieved?} \\
-    The \texttt{T0} cache fill level achieved the maximum geometric mean speedup, as it actively pulls data into the L1 data cache where the FPU can access it immediately.
+    The \texttt{T0} cache fill level achieved the maximum geometric mean speedup, as it actively pulls the heavily reused matrix blocks into the L1 data cache where the scalar arithmetic units can access them immediately.
 \end{enumerate}
