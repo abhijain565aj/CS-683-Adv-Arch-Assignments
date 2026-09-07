@@ -14,9 +14,9 @@
 \end{itemize}
 
 \subsection{Matrix Size Analysis}
-As the matrix size increases from $128 \times 128$ up to $2048 \times 2048$, software prefetching demonstrates exceptional scaling. Unlike previous assumptions, the new data reveals that software prefetching delivers substantial performance improvements \textbf{regardless} of whether the hardware prefetcher is enabled or disabled. 
+As the matrix size increases from $128 \times 128$ up to $2048 \times 2048$, the measured benefit of software prefetching increases in both hardware-prefetcher configurations.
 
-When hardware prefetchers are OFF, the speedup scales from $1.69\times$ at $N=128$ up to $2.08\times$ at $N=2048$. Strikingly, with hardware prefetchers ON, the gains are nearly identical, climbing from $1.80\times$ to $2.07\times$. This proves that for large memory working sets with complex strided access patterns (like cache-blocked SGEMM), the native hardware prefetcher alone is insufficient. Manually issuing \texttt{\_mm\_prefetch} instructions perfectly complements the hardware, effectively hiding the memory latency bottleneck that would otherwise stall the FPU.
+When hardware prefetchers are OFF, the speedup rises from $1.69\times$ at $N=128$ to $2.08\times$ at $N=2048$. With hardware prefetchers ON, the measured gains are similar, from $1.80\times$ to $2.07\times$. In the NT layout, the inner $K$ accesses are contiguous in both operands, but the kernel still has multiple concurrent streams and repeatedly traverses large rows. These results suggest that explicit prefetching can provide additional benefit even when hardware prefetching is enabled.
 
 \subsection{Execution Time and Speedup}
 $$
@@ -78,7 +78,7 @@ $2048 \times 2048$ & 16 / T2 & 1868.4863& 2.0849$\times$ & 64 / T1  & 1864.7300&
 \end{figure}
 
 \subsection{Prefetch Distance}
-The prefetch distance determines how far ahead the CPU attempts to fetch memory into the cache. Based on the geometric mean across all evaluated sizes, a prefetch distance of 32 floats (equivalent to 2 cache lines) yielded the best overall performance. Because we are cache-blocking the matrix multiplication, the working set is highly localized. Requesting data too far in advance causes data to be fetched and subsequently evicted before the FPU actually reaches it.
+The prefetch distance determines how far ahead the CPU requests data. Based on the geometric mean across all evaluated sizes, 32 floats (two 64-byte cache lines) gave the best global result. This is distinct from the best configuration at an individual size, which can use another distance. Requests that are too far ahead can add cache pressure or arrive before the data is used.
 
 \begin{figure}[H]
 \centering
@@ -87,7 +87,7 @@ The prefetch distance determines how far ahead the CPU attempts to fetch memory 
 \end{figure}
 
 \subsection{Cache Fill Level}
-The cache fill level dictates which level of the cache hierarchy the prefetched data is loaded into. Taking the geometric mean across all matrix sizes, the \texttt{T1} level provided the optimal overall results. Fetching into the L2/L3 caches (\texttt{T1}) rather than forcing everything into L1 (\texttt{T0}) likely reduces L1 cache thrashing. It keeps the blocked data close enough to avoid costly main memory accesses without evicting immediately useful variables from the highly constrained L1 data cache.
+The locality hint expresses the expected temporal reuse of prefetched data; it does not guarantee placement in a particular cache level. Taking the geometric mean across all matrix sizes, \texttt{T1} provided the best overall result. The result is consistent with lower L1 cache pressure than \texttt{T0}, although exact behavior is microarchitecture-dependent.
 
 \begin{figure}[H]
 \centering
@@ -96,7 +96,7 @@ The cache fill level dictates which level of the cache hierarchy the prefetched 
 \end{figure}
 
 \subsection{Hardware Prefetchers}
-The interaction with hardware prefetchers shows that modern hardware and explicit software instructions are highly synergistic for this workload. Because matrix multiplication involves jumping across rows and columns depending on the loop bounds, the hardware prefetcher (which excels at simple, linear access patterns) cannot perfectly predict the next required addresses. Therefore, explicit software hints provide a critical performance boost ($\sim 2.07\times$ speedup) even when hardware prefetchers are left ON.
+The results show that software prefetching provided additional benefit with hardware prefetchers enabled. Although the inner $K$ streams are linear, the blocked kernel has several active streams and reuse patterns, so hardware prefetching need not hide every data-delivery delay. The best observed speedup with hardware prefetching enabled was $\sim 2.07\times$.
 
 \begin{figure}[H]
 \centering
@@ -108,11 +108,11 @@ The interaction with hardware prefetchers shows that modern hardware and explici
 \subsection{Questions}
 \begin{enumerate}
     \item \textbf{What trend do you observe in speedup with different matrix sizes?} \\
-    Speedup scales positively with matrix size in both hardware-prefetcher configurations (ON and OFF). It steadily climbs from $\sim 1.7\times$ at $N=128$ to a peak of $\sim 2.08\times$ at $N=2048$. As the matrix size grows beyond the capacity of the L2/L3 caches, the memory bandwidth bottleneck becomes more pronounced, which makes software prefetching increasingly beneficial.
+    In these measurements, speedup increases with matrix size in both hardware-prefetcher configurations, from about $1.7\times$ at $N=128$ to about $2.08\times$ at $N=2048$. This trend is consistent with data-delivery delays becoming a larger fraction of execution time as the working set grows.
     
     \item \textbf{What is the best prefetch distance?} \\
     Based on the geometric mean across all evaluated sizes, 32 floats (which translates to 2 cache lines) is the optimal prefetch distance.
     
     \item \textbf{At what cache fill level do you achieve the maximum speedup?} \\
-    The \texttt{T1} cache fill level achieved the maximum geometric mean speedup. This prevents L1 cache pollution while staging the heavily reused matrix blocks safely in the mid-level caches for quick access.
+    The \texttt{T1} hint achieved the maximum geometric-mean speedup. It requests lower temporal locality than \texttt{T0}; the actual cache response is microarchitecture-dependent.
 \end{enumerate}

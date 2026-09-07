@@ -5,7 +5,7 @@
 \section{Task 2C: Software Prefetching + SIMD}
 
 \subsection{Combined Implementation}
-In the combined implementation (\texttt{matmul\_optimized.cpp}), the matrix multiplication is first cache-blocked into tiles of $BM=32$ and $BN=32$ to maximize data reuse. Within these tiles, the inner kernel is aggressively unrolled into a $2 \times 4$ micro-kernel utilizing 256-bit AVX2 SIMD intrinsics (\texttt{\_\_m256}). Vectorization is achieved using \texttt{\_mm256\_fmadd\_ps} to perform 8 fused multiply-add operations concurrently. To keep these wide vector units fed, \texttt{\_mm\_prefetch} instructions are interleaved within the innermost $K$-loop, fetching chunks of matrices $A$ and $B$ ahead of the SIMD load instructions. 
+In the combined implementation (\texttt{matmul\_optimized.cpp}), the matrix multiplication is cache-blocked into $BM=32$ and $BN=32$ tiles. Within each tile, a $2 \times 4$ register-blocked micro-kernel uses 256-bit AVX2 intrinsics (\texttt{\_\_m256}) and \texttt{\_mm256\_fmadd\_ps}. The submitted final kernel uses a fixed prefetch distance of 64 floats and issues \texttt{\_mm\_prefetch} only for upcoming $A$ data. The active $B$ rows are reused across output rows by the loop structure and rely on normal cache and hardware-prefetch behavior.
 
 \subsection{Experimental Setup}
 \begin{itemize}
@@ -20,7 +20,7 @@ In the combined implementation (\texttt{matmul\_optimized.cpp}), the matrix mult
 
 \begin{table}[H]
 \centering
-\caption{Task 2C combined optimization results (HW Prefetch ON)}
+\caption{Best configurations from the Task 2C parameter sweep (HW prefetch ON)}
 \begin{tabular}{lccccc}
 \toprule
 Matrix Size & SIMD Width & Prefetch Distance & Level & Time (ms) & Speedup \\
@@ -33,6 +33,8 @@ $2048 \times 2048$ & 256 & 32  & T0 & 289.8732& 14.1236$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+These are per-size best results from the sweep, not measurements of one fixed final configuration. In particular, for $K=128$, a distance of 512 makes the guarded prefetch condition false, so that row effectively has no useful software-prefetch requests and should not be interpreted as a meaningful prefetch optimum. The final submitted kernel is reported separately in the appendix using the autograder configuration.
 
 \begin{figure}[H]
     \centering
@@ -53,7 +55,7 @@ $2048 \times 2048$ & 256 & 32  & T0 & 289.8732& 14.1236$\times$ \\
 \subsection{Analysis}
 
 \subsubsection{SIMD Width and Instruction Count}
-Moving from scalar code to 128-bit and then 256-bit SIMD drastically reduces the total number of instructions executed. Because the 256-bit SIMD instructions consume data much faster than scalar code (processing 8 floats per instruction), the CPU pipeline bottleneck shifts away from instruction fetch/decode and lands squarely on memory bandwidth.
+Moving from scalar code to 128-bit and then 256-bit SIMD reduces the number of executed instructions. A 256-bit vector instruction processes 8 floats, but the results do not by themselves establish a single memory-bandwidth bottleneck. They suggest that, after vectorization, data delivery becomes a larger fraction of execution time.
 
 \begin{figure}[H]
     \centering
@@ -72,7 +74,7 @@ Moving from scalar code to 128-bit and then 256-bit SIMD drastically reduces the
 \end{figure}
 
 \subsubsection{Prefetch Cache Fill Level}
-Because of the massive throughput of the 256-bit ALUs, the kernel becomes highly sensitive to memory latency. Consequently, the optimal prefetch cache fill level shifted to \texttt{T0} (L1 cache) across almost all sizes. In Task 2A (scalar), \texttt{T1} (L2 cache) was preferred to avoid L1 thrashing. However, SIMD units require data immediately in the L1 cache; fetching to L2 introduces too much latency for the vector ALUs.
+In this sweep, \texttt{T0} produced the best combined result for most sizes. This differs from the best geometric-mean hint in Task 2A. Prefetch locality hints are requests rather than guarantees of cache placement, so the difference should be read as a workload-specific measurement, not as proof that SIMD data must arrive in L1.
 
 \begin{figure}[H]
 \centering
@@ -81,7 +83,7 @@ Because of the massive throughput of the 256-bit ALUs, the kernel becomes highly
 \end{figure}
 
 \subsubsection{Prefetch Distance and Cache Metrics}
-The geometric mean for the optimal prefetch distance landed at 32 floats, which ensures data arrives just in time without evicting the currently active $32 \times 32$ cache tiles. Requesting data too far ahead (e.g., 512 floats) triggers a noticeable increase in L1D and L2 cache misses, as prefetched data evicts active working sets before they can be fully utilized.
+Across the sweep, 32 floats was the best global prefetch distance by geometric mean. This does not imply that it is best at every size: the per-size best configurations in Table~1 include other distances. Large distances can add cache pressure, but if the distance is at least $K$, the guarded prefetch does not execute and the point instead represents an effectively no-prefetch case.
 
 \begin{figure}[H]
 \centering
@@ -127,7 +129,7 @@ The geometric mean for the optimal prefetch distance landed at 32 floats, which 
 
 \begin{table}[H]
 \centering
-\caption{Task 2 final performance summary (Peak observed across sizes)}
+\caption{Task 2 parameter-sweep summary (peak observed across sizes)}
 \begin{tabular}{lllc}
 \toprule
 Technique & Peak Speedup & Optimal Hint/Width & Matrix Size at Peak \\
@@ -140,6 +142,4 @@ Prefetching + SIMD   & $17.11\times$     & 256-bit, Dist 16, T0 & $256 \times 25
 \end{table}
 
 \subsection{Task 2 Conclusion}
-The optimization journey clearly demonstrates that maximum performance requires harmonizing compute and memory architectures. While software prefetching alone provided a modest $\sim 2\times$ speedup by hiding latency, SIMD vectorization delivered a massive $>12\times$ compute boost. 
-
-However, SIMD alone eventually stalls waiting for memory. By combining them—using cache tiling to shrink the working set, SIMD to maximize arithmetic throughput, and \texttt{T0} L1 software prefetching to guarantee data availability—we achieved a highly synergistic peak speedup of $17.11\times$. The combination proves that keeping vector units fed is just as critical as the vectorization itself.
+The parameter sweep shows that software prefetching alone reached about $2.08\times$ speedup, SIMD reached about $12.6\times$, and their best per-size sweep configuration reached $17.11\times$. The later fixed, hand-tuned kernel evaluated by the autograder is a separate result: as reported in the appendix, it reached $22.07\times$ on the primary machine at $N=1024$. The two numbers use different configurations and should not be treated as contradictory. Overall, the results show that vectorization, register blocking, locality, and prefetch tuning can combine effectively, while the best setting remains workload- and machine-dependent.
