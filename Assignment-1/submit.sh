@@ -12,7 +12,7 @@ echo "Preparing submission: $TAR_NAME"
 rm -rf "$TMP_DIR"
 rm -f "$TAR_NAME"
 
-if [ $1 == "clean" ]; then
+if [[ $1 == "clean" ]]; then
     echo "Cleaned up previous submission files."
     exit 0
 fi
@@ -50,8 +50,8 @@ for file in matmul_simd.cpp matmul_prefetch.cpp matmul_optimized.cpp; do
 done
 
 # Task 2 - Report
-if [ -f "task2/task2_report.pdf" ]; then
-    cp "task2/task2_report.pdf" "$TMP_DIR/task2/"
+if [ -f "task2/report/task2_report.pdf" ]; then
+    cp "task2/report/task2_report.pdf" "$TMP_DIR/task2/"
 else
     echo "  [!] Error: task2_report.pdf is missing"
 fi
@@ -71,6 +71,8 @@ if [ -f "README.md" ]; then
 else
     echo "  [!] Error: README.md is missing"
 fi
+
+tree "$TMP_DIR"
 
 # 4. Compress the folder into a tar.gz archive
 echo "➔ Compressing into $TAR_NAME..."

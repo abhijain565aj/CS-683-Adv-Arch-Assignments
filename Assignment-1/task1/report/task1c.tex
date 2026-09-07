@@ -30,9 +30,9 @@ $2048 \times 2048$ & 256-bit & 2,510,515,355 & 9.150 & 7.47$\times$ \\
 
 \begin{itemize}
     \item \texttt{\_mm256\_setzero\_ps}: Purpose: Initializes a 256-bit accumulator vector to zero . Justification: Needed to clear the parallel accumulator state before summing the kernel convolution .
-    \item \texttt{\_mm256\_loadu\_ps} / \texttt{\_mm256\_storeu\_ps}: Purpose: Loads/stores 8 continuous floats to/from memory . Justification: Since the sliding window shifts by 1 pixel at a time, memory alignment on a 32-byte boundary is impossible to guarantee. Unaligned memory instructions are strictly required .
+    \item \texttt{\_mm256\_loadu\_ps} / \texttt{\_mm256\_storeu\_ps}: Purpose: Loads/stores 8 contiguous floats to/from memory. Unaligned loads and stores were used because 32-byte alignment cannot be guaranteed for every accessed address.
     \item \texttt{\_mm256\_set1\_ps}: Purpose: Broadcasts a single kernel weight into all 8 lanes of the SIMD register . Justification: During a single kernel step, the same weight must be multiplied simultaneously against 8 adjacent spatial input pixels .
-    \item \texttt{\_mm256\_fmadd\_ps}: Purpose: Fused multiply-add . Justification: Highly efficient operations that multiply the input vector by the weight vector and add it to the accumulator in a single hardware instruction cycle, halving arithmetic overhead .
+    \item \texttt{\_mm256\_fmadd\_ps}: Purpose: Fused multiply-add. It performs the multiply-add in one fused vector instruction, reducing instruction count and improving arithmetic throughput.
 \end{itemize}
 
 \subsection{Speedup Plots}
@@ -67,17 +67,17 @@ $2048 \times 2048$ & 256-bit & 2,510,515,355 & 9.150 & 7.47$\times$ \\
 \end{figure}
 
 \subsection{Analysis}
-SIMD instructions massively reduced the executed instruction count. As expected, 128-bit SIMD processing 4 floats per cycle reduced instructions by approximately $4.4\times$, while 256-bit SIMD processing 8 floats reduced instructions by an impressive $8.3\times$. This corresponds closely to the theoretical maximums.
+SIMD substantially reduced the executed instruction count. A 128-bit vector instruction processes 4 single-precision values, while a 256-bit AVX2 vector instruction processes 8. The measured instruction reductions were approximately $4.4\times$ and $8.3\times$, respectively; realized performance also depends on loads, scheduling, and reduction overhead.
 
-Interestingly, while 256-bit SIMD halved the instructions compared to 128-bit, the raw speedup didn't strictly double. At a $1024 \times 1024$ image size, 256-bit only offered a marginal speedup advantage over 128-bit ($7.74\times$ vs $7.10\times$). This indicates that at high instruction-level parallelism, the CPU becomes heavily bound by memory bandwidth (the L1 cache latency) rather than pure arithmetic throughput. 
+Interestingly, while 256-bit SIMD approximately halved the instructions compared to 128-bit, the raw speedup did not double. At a $1024 \times 1024$ image size, 256-bit offered a marginal speedup advantage over 128-bit ($7.74\times$ vs $7.10\times$). This indicates that data-delivery throughput and other memory-system effects become more important than arithmetic instruction count alone. Bandwidth and cache latency are distinct effects, and these measurements do not isolate either one.
 
 \subsection{Questions}
 
 \begin{enumerate}
     \item \textbf{How did the instruction count change?} \\
-    The instruction count plummeted precisely in line with the vector widths: 128-bit SIMD divided instructions by $\sim$4.4, and 256-bit divided them by $\sim$8.3 compared to the naive baseline.
+    The instruction count fell by $\sim$4.4 for the 128-bit version and $\sim$8.3 for the 256-bit version compared with the naive baseline. These reductions are consistent with processing 4 and 8 floats per vector instruction, respectively.
     \item \textbf{Did you achieve speedup? Why?} \\
-    Yes, a massive speedup of around $7\times$ to $8\times$ was achieved. This was almost entirely due to data parallelism (fused multiply-add computing multiple pixels per cycle) and the drastic reduction in loop maintenance branch instructions.
+    Yes, speedups of roughly $7\times$ to $8\times$ were observed. Data parallelism, fused vector multiply-add instructions, and lower loop-control overhead all contributed; the vector width specifies elements per instruction, not a guaranteed number of elements per cycle.
     \item \textbf{Which SIMD intrinsics were used and why?} \\
-    We primarily used \texttt{\_mm256\_loadu\_ps} for unaligned memory reads, \texttt{\_mm256\_set1\_ps} to broadcast scalar weights to all vector lanes, and \texttt{\_mm256\_fmadd\_ps} to execute the core accumulation mathematically efficiently. Unaligned load/stores were necessary because of the overlapping nature of 2D sliding windows .
+    We primarily used \texttt{\_mm256\_loadu\_ps} for safe unaligned memory reads, \texttt{\_mm256\_set1\_ps} to broadcast scalar weights to all vector lanes, and \texttt{\_mm256\_fmadd\_ps} for the core fused accumulation. The unaligned operations avoid requiring every sliding-window address to be 32-byte aligned.
 \end{enumerate}
