@@ -9,7 +9,7 @@ To parallelize the SGEMM operation, we implemented a register-blocked SIMD micro
 
 \subsection{Performance and Instruction Analysis}
 
-As expected, vectorizing the dot product drastically reduced the number of executed instructions. For a $1024 \times 1024$ matrix, the baseline executed $\sim$6.46 billion instructions, whereas the 256-bit SIMD implementation required only $\sim$227 million instructions—a reduction by a factor of roughly $28\times$.
+The SIMD/register-blocked implementation substantially reduced the number of executed instructions. For a $1024 \times 1024$ matrix, the baseline executed $\sim$6.46 billion instructions, whereas the 256-bit implementation required only $\sim$227 million---a reduction of roughly $28\times$. This reduction reflects the complete micro-kernel: vector operations, the $2 \times 4$ register block, unrolling, load reuse, FMA, and less loop-control work.
 
 \begin{table}[H]
 \centering
@@ -80,8 +80,8 @@ $2048 \times 2048$ & 3802.51 & 8.51$\times$ & 10.00$\times$ \\
 
 \begin{enumerate}
     \item \textbf{What trends do you observe in speedup for different combinations of matrix sizes and SIMD widths?} \\
-    The 256-bit SIMD implementation strictly outperforms the 128-bit implementation across all matrix sizes. For both widths, the speedup peaks at smaller boundaries (e.g., $12.64\times$ at $N=128$) and gently degrades as the matrix size increases (dropping to $10.00\times$ at $N=2048$). This downward trend indicates that as the matrix footprint grows well beyond the L1/L2 cache capacities, memory bandwidth becomes the primary bottleneck, starving the highly efficient SIMD arithmetic units.
+    The 256-bit SIMD implementation outperforms the 128-bit implementation in these measurements. For both widths, the speedup is highest at smaller sizes (for example, $12.64\times$ at $N=128$) and declines at $N=2048$ ($10.00\times$ for 256-bit). This trend suggests that data delivery and cache effects become a larger fraction of execution time as the matrix footprint grows.
     
     \item \textbf{For which SIMD width do you achieve the maximum speedup?} \\
-    We achieved the maximum speedup using the 256-bit SIMD width. It produced a geometric mean speedup of roughly $11.19\times$ across all sizes, compared to the 128-bit version which was consistently slower. This maps directly to the hardware capability: 256-bit registers process 8 single-precision floats per instruction cycle, effectively doubling the raw arithmetic throughput over 128-bit SSE registers.
+    We achieved the maximum speedup using the 256-bit SIMD width. It produced a geometric-mean speedup of roughly $11.19\times$ across the tested sizes. AVX2 processes 8 single-precision values per vector instruction, twice the 4 values of 128-bit SIMD; realized throughput also depends on loads, execution ports, dependencies, and frequency.
 \end{enumerate}
