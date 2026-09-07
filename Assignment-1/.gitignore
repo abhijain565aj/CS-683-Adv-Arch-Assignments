@@ -5,3 +5,6 @@ pa1-dhurandhar-microarchitecture/
 report/*
 !report/*.tex
 !report/*/*.tex
+*/.venv/
+*.pyc
+*/__pycache__
