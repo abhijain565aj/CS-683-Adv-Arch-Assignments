@@ -1,17 +1,11 @@
-// matmul_optimized.cpp
-// Stage 3: software-pipelined 2x4 AVX2/FMA kernel
+// matmul_optimized.cpp  STAGE 3: PUT IT ALL TOGETHER
 //
-// Keeps the best-performing structure:
-//   - BM = 32, BN = 32
-//   - j micro-tiles outside i micro-tiles
-//   - 2x4 register blocking
-//   - p unrolled by 32 floats
-//   - A-only software prefetch
-//
-// Main change:
-//   - software-pipeline the loads inside each 8-float subchunk
-//   - overlap B loads / next-A loads with independent FMAs
-//   - keep the same 8 accumulators, avoiding the register-pressure problem of 3x4
+// This is the graded function AND the kernel that gets injected into llama.cpp. Combine
+// everything you have learned across the whole assignment  loop reordering, register
+// blocking and unrolling (Task 1 / Stage 1 here), cache tiling and software prefetch
+// (Stage 2)  and TUNE it to be as fast as you can. Your speedup over matmul_naive determines
+// your score (see the tier table the harness prints), and this same function will power a
+// real LLM inference via `make llama-demo`.
 
 #include <immintrin.h>
 
@@ -30,6 +24,7 @@ static inline float horizontal_sum(__m256 value) {
 
 void matmul_optimized(const float* A, const float* B, float* C,
                       int M, int N, int K, int lda, int ldb, int ldc) {
+    // TODO(student): replace this placeholder with your best combined implementation.
     const int BM = 32;
     const int BN = 32;
     const int prefetch_distance = 64;
@@ -76,7 +71,6 @@ void matmul_optimized(const float* A, const float* B, float* C,
                                 _MM_HINT_T0);
                         }
 
-                        // -------- p + 0 --------
                         __m256 a0_cur = _mm256_loadu_ps(a0 + p);
                         __m256 a1_cur = _mm256_loadu_ps(a1 + p);
 
@@ -96,14 +90,12 @@ void matmul_optimized(const float* A, const float* B, float* C,
                         acc02 = _mm256_fmadd_ps(a0_cur, b_cur, acc02);
                         acc12 = _mm256_fmadd_ps(a1_cur, b_cur, acc12);
 
-                        // Preload next A chunk before finishing this one.
                         __m256 a0_next = _mm256_loadu_ps(a0 + p + 8);
                         __m256 a1_next = _mm256_loadu_ps(a1 + p + 8);
 
                         acc03 = _mm256_fmadd_ps(a0_cur, b_next, acc03);
                         acc13 = _mm256_fmadd_ps(a1_cur, b_next, acc13);
 
-                        // -------- p + 8 --------
                         a0_cur = a0_next;
                         a1_cur = a1_next;
 
@@ -129,7 +121,6 @@ void matmul_optimized(const float* A, const float* B, float* C,
                         acc03 = _mm256_fmadd_ps(a0_cur, b_next, acc03);
                         acc13 = _mm256_fmadd_ps(a1_cur, b_next, acc13);
 
-                        // -------- p + 16 --------
                         a0_cur = a0_next;
                         a1_cur = a1_next;
 
@@ -155,7 +146,6 @@ void matmul_optimized(const float* A, const float* B, float* C,
                         acc03 = _mm256_fmadd_ps(a0_cur, b_next, acc03);
                         acc13 = _mm256_fmadd_ps(a1_cur, b_next, acc13);
 
-                        // -------- p + 24 --------
                         a0_cur = a0_next;
                         a1_cur = a1_next;
 
@@ -179,7 +169,6 @@ void matmul_optimized(const float* A, const float* B, float* C,
                         acc13 = _mm256_fmadd_ps(a1_cur, b_next, acc13);
                     }
 
-                    // Remaining full AVX2 chunks.
                     for (; p + 7 < K; p += 8) {
                         __m256 a0_vec = _mm256_loadu_ps(a0 + p);
                         __m256 a1_vec = _mm256_loadu_ps(a1 + p);
@@ -240,7 +229,6 @@ void matmul_optimized(const float* A, const float* B, float* C,
                     C[static_cast<long>(i + 1) * ldc + j + 3] = sum13;
                 }
 
-                // Remaining single row in this i tile.
                 for (; i < i_end; ++i) {
                     const float* a = A + static_cast<long>(i) * lda;
 
@@ -265,7 +253,6 @@ void matmul_optimized(const float* A, const float* B, float* C,
                 }
             }
 
-            // Remaining columns in this j tile.
             for (; j < j_end; ++j) {
                 const float* b = B + static_cast<long>(j) * ldb;
 

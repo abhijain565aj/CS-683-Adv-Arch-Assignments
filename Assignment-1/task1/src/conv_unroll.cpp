@@ -19,10 +19,8 @@ void conv_unroll(const float* in, float* out, const float* ker,
             float acc6 = 0.0f;
             float acc7 = 0.0f;
 
-            // Unroll ky by 2
             for (int ky = 0; ky < K - 1; ky += 2) {
 
-                // First ky
                 for (int kx = 0; kx < K - 1; kx += 2) {
                     float k0 = ker[ky * K + kx];
                     float k1 = ker[ky * K + kx + 1];
@@ -52,7 +50,6 @@ void conv_unroll(const float* in, float* out, const float* ker,
                     acc7 += in[(oy + ky) * in_stride + ox + 7 + kx + 1] * k1;
                 }
 
-                // Extra kx = K - 1
                 {
                     int kx = K - 1;
                     float k0 = ker[ky * K + kx];
@@ -67,7 +64,6 @@ void conv_unroll(const float* in, float* out, const float* ker,
                     acc7 += in[(oy + ky) * in_stride + ox + 7 + kx] * k0;
                 }
 
-                // Second ky
                 int ky2 = ky + 1;
 
                 for (int kx = 0; kx < K - 1; kx += 2) {
@@ -99,7 +95,6 @@ void conv_unroll(const float* in, float* out, const float* ker,
                     acc7 += in[(oy + ky2) * in_stride + ox + 7 + kx + 1] * k1;
                 }
 
-                // Extra kx = K - 1
                 {
                     int kx = K - 1;
                     float k0 = ker[ky2 * K + kx];
@@ -115,7 +110,6 @@ void conv_unroll(const float* in, float* out, const float* ker,
                 }
             }
 
-            // Extra ky = K - 1
             {
                 int ky = K - 1;
 
@@ -148,7 +142,6 @@ void conv_unroll(const float* in, float* out, const float* ker,
                     acc7 += in[(oy + ky) * in_stride + ox + 7 + kx + 1] * k1;
                 }
 
-                // Extra kx = K - 1
                 {
                     int kx = K - 1;
                     float k0 = ker[ky * K + kx];

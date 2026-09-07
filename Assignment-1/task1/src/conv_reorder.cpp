@@ -6,7 +6,6 @@
 void conv_reorder(const float* in, float* out, const float* ker,
                   int H, int W, int K) {
     // TODO(student): replace this placeholder with your reordered implementation.
-    // conv_naive(in, out, ker, H, W, K);
     const int p = K / 2;
     const int in_stride = W + 2 * p;  // padded row stride
 
@@ -26,5 +25,4 @@ void conv_reorder(const float* in, float* out, const float* ker,
             }
         }
     }
-
 }

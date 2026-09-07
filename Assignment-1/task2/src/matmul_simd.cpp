@@ -3,9 +3,9 @@
 
 #include "matmul.h"
 
-// Calculate sum of 8 elements, like take bottom 4 and top 4, add them
-// then again do the same 2 times to get the sum of all elements as the first element
-static inline float horizontal_sum(__m256 value) {
+void matmul_simd(const float* A, const float* B, float* C,
+                 int M, int N, int K, int lda, int ldb, int ldc) {
+    // TODO(student): replace this placeholder with your register-tiled AVX2 implementation.
     __m128 low = _mm256_castps256_ps128(value);
     __m128 high = _mm256_extractf128_ps(value, 1);
     __m128 sum = _mm_add_ps(low, high);

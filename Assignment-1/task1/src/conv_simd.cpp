@@ -5,6 +5,7 @@
 
 void conv_simd(const float* in, float* out, const float* ker,
                int H, int W, int K) {
+    // TODO(student): replace this placeholder with your AVX2 implementation.
     const int p = K / 2;
     const int in_stride = W + 2 * p;
     for (int oy = 0; oy < H; ++oy) {

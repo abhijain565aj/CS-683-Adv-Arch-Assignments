@@ -1,26 +1,14 @@
 // conv_optimized.cpp  STAGE 5: PUT IT ALL TOGETHER
-//
-// Assumptions:
-//   - K is odd
-//   - W is a multiple of 8
-//
-// Combines:
-//   - cache tiling
-//   - loop reordering
-//   - AVX2
-//   - FMA
-//   - kx unrolling by 2
-//   - multiple independent accumulators
+// Hint: measure after every change. Not every "optimization" helps  let the numbers,
+// not intuition, decide.
 
 #include <immintrin.h>
 
 #include "convolution.h"
 
-void conv_optimized(const float* __restrict in,
-                    float* __restrict out,
-                    const float* __restrict ker,
+void conv_optimized(const float* in, float* out, const float* ker,
                     int H, int W, int K) {
-
+    // TODO(student): replace this placeholder with your best combined implementation.
     const int p = K / 2;
     const int in_stride = W + 2 * p;
 
@@ -47,17 +35,6 @@ void conv_optimized(const float* __restrict in,
                     __m256 acc2 = _mm256_setzero_ps();
                     __m256 acc3 = _mm256_setzero_ps();
 
-                    /*
-                     * Loop order:
-                     *
-                     *   ky
-                     *     kx
-                     *       oy
-                     *         ox
-                     *
-                     * We are doing the 4 oy values simultaneously
-                     * inside the vectorized x loop.
-                     */
                     for (int ky = 0; ky < K; ++ky) {
 
                         const float* row0 =
@@ -75,13 +52,7 @@ void conv_optimized(const float* __restrict in,
                         const float* krow =
                             ker + ky * K;
 
-                        /*
-                         * Unroll kx by 2.
-                         *
-                         * Since K is odd:
-                         *   0,2,4,...,K-3
-                         * followed by K-1.
-                         */
+                        
                         int kx = 0;
 
                         for (; kx < K - 1; kx += 2) {
@@ -112,9 +83,6 @@ void conv_optimized(const float* __restrict in,
                             acc2 = _mm256_fmadd_ps(x20, w0, acc2);
                             acc3 = _mm256_fmadd_ps(x30, w0, acc3);
 
-                            /*
-                             * Second kernel column.
-                             */
                             const __m256 x01 =
                                 _mm256_loadu_ps(row0 + kx + 1);
 
@@ -133,9 +101,6 @@ void conv_optimized(const float* __restrict in,
                             acc3 = _mm256_fmadd_ps(x31, w1, acc3);
                         }
 
-                        /*
-                         * Remaining kx = K - 1.
-                         */
                         const __m256 w =
                             _mm256_set1_ps(krow[K - 1]);
 
@@ -171,9 +136,6 @@ void conv_optimized(const float* __restrict in,
                 }
             }
 
-            /*
-             * Handle remaining 1-3 rows inside the tile.
-             */
             for (; oy < oyEnd; ++oy) {
 
                 for (int ox = oxT; ox < oxEnd; ox += 8) {
