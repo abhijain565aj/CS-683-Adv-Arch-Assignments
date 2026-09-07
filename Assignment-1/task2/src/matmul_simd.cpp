@@ -3,9 +3,7 @@
 
 #include "matmul.h"
 
-void matmul_simd(const float* A, const float* B, float* C,
-                 int M, int N, int K, int lda, int ldb, int ldc) {
-    // TODO(student): replace this placeholder with your register-tiled AVX2 implementation.
+static inline float horizontal_sum(__m256 value) {
     __m128 low = _mm256_castps256_ps128(value);
     __m128 high = _mm256_extractf128_ps(value, 1);
     __m128 sum = _mm_add_ps(low, high);
@@ -19,6 +17,7 @@ void matmul_simd(const float* A, const float* B, float* C,
 
 void matmul_simd(const float* A, const float* B, float* C,
                  int M, int N, int K, int lda, int ldb, int ldc) {
+    // TODO(student): replace this placeholder with your register-tiled AVX2 implementation.int i;
     int i;
     for (i = 0; i + 1 < M; i += 2) {
         const float* a0 = A + static_cast<long>(i) * lda;
