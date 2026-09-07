@@ -90,7 +90,19 @@ $8192 \times 8192$ & 839.46 & 1.77$\times$ & 3.87$\times$ \\
 \subsection{Analysis}
 Reordering yielded nearly a 2$\times$ speedup by making \texttt{ox} the innermost loop and increasing the useful work performed per fetched cache line. Unrolling resulted in an almost 4$\times$ speedup; the gain is consistent with both lower loop-control overhead and greater instruction-level parallelism from the independent accumulators.
 
-As shown in Figure~\ref{fig:task1a_metrics}, unrolling drops instruction counts from $\sim$1.31 billion (naive) to $\sim$359 million (unrolled) for a $512 \times 512$ matrix. The total instruction counts for loop reordering remained comparable to the naive baseline. This suggests that its speedup is primarily due to improved memory-access behavior rather than reduced dynamic instruction count; changes in address generation, dependencies, and prefetch behavior may also contribute.
+As shown in Figure~\ref{fig:task1a_metrics}, unrolling drops instruction counts from $\sim$1.31 billion (naive) to $\sim$359 million (unrolled) for a $512 \times 512$ matrix. 
+
+The total instruction counts for loop reordering remained comparable to the naive baseline but still the difference is significant and the performance is better. This suggests that for this case, we need to take into accoiunt both improved memory-access behavior as well as the instruction count reduction, rather than just one of them. 
+
+\paragraph{Illustrating how Instruction Count Reduction via Reordering}While the primary goal of loop reordering is spatial cache locality, we observed that it also intrinsically reduces the total instruction count by minimizing loop maintenance overhead. This overhead consists of loop variable initialization, bounds checking, and incrementing. 
+
+To illustrate, consider our spatial dimension ($2048$) and kernel dimension ($3$):
+\begin{itemize}
+    \item \textbf{Naive Ordering (Outer 2048, Inner 3):} The inner loop must be initialized $2048$ times. The outer loop evaluates its condition and increments $2048$ times.
+    \item \textbf{Reordered (Outer 3, Inner 2048):} The inner loop is initialized only $3$ times. The outer loop evaluates its condition and increments only $3$ times.
+\end{itemize}
+
+By placing the spatial loops (\texttt{ox}) with massive bounds on the inside, and the kernel loops (\texttt{kx}) with tiny bounds on the outside, we drastically reduced the number of times the inner loops had to be set up and torn down. Across a full image convolution, this simple reordering inherently eliminates millions of redundant branch and initialization instructions, further contributing to the overall speedup.
 
 \begin{figure}[H]
     \centering
