@@ -1,0 +1,45 @@
+{
+  "kernel": 5,
+  "cpu": 0,
+  "seed": 1234,
+  "widths": [
+    128,
+    256
+  ],
+  "skipped_widths": [
+    512
+  ],
+  "sizes": [
+    512,
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "flags": [
+    "-std=c++17",
+    "-O2",
+    "-fno-tree-vectorize",
+    "-mavx2",
+    "-mfma",
+    "-Wall"
+  ],
+  "perf_repeats": 3,
+  "timing_repeats": 3,
+  "source_sha256": {
+    "src/conv_tile.cpp": "329d40a4750464844bcdd1ca7dcb477b6b8119357042fb42b291fe9dba0e29bd",
+    "src/main.cpp": "46e4fe817df4244dca58670116ee122a645bbceb2c98e74908a9d893c32067f5",
+    "src/conv_unroll.cpp": "366b85dd2b6e94780d225de2cfe7a7be2e0194fbe31e1dc69e5ebcabae23c67b",
+    "src/conv_reorder.cpp": "4190fde1329ce3867a3fbc10d8183ab056bba8ae4ebfac0b17f16dbaece95e3b",
+    "src/conv_simd.cpp": "743fb330f495e81d8a0e8a375a948976365ed02bb02724f84a117e940c8d608b",
+    "src/conv_optimized.cpp": "2ea0f959e180362c8d415179cb9103489d0f5e8ac7036f33f3fbc78541898822",
+    "src/conv_naive.cpp": "831510e051fd012aed2185b34e0a66c71ad22f3c2e343eb9aac801225543738f",
+    "include/utils.h": "0880fc3b2d9e903d61a65d64eafeb0454a540d2b83ad98c8a0b1008ecbee0b05",
+    "include/timer.h": "4856031b8bcb14e279842debb9750166e0db62b39cd531a71630f23b55e293e2",
+    "include/convolution.h": "92ad0695746902dba4660dbe918aa82dbe8fd4cb4fbf03443025490888d0dfab",
+    "perf_main.cpp": "0c87498294cd54515c3c073b7170015a758abd619e9ca563ce79376fe7c8bc5a"
+  },
+  "counter_scope": "Whole perf_main process, including setup, 5 warmups and 20 kernel calls",
+  "speedup": "Median of paired naive_ms/simd_ms timing ratios",
+  "implementation": "128/256/512-bit FMA; 128-bit uses AVX-encoded instructions, not legacy SSE-only flags"
+}

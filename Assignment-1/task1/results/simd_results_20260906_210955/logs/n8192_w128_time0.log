@@ -1,0 +1,8 @@
+$ taskset -c 0 /tmp/conv_simd_sweep_l9fdfdz8/conv_128 simd 8192 8192 5 1234
+CS683 PA-1 Task 1  2D convolution optimization harness
+
+=== Workload  H=8192 W=8192 K=5 seed=1234 (not graded) ===
+stage           correct    time(ms)     GFLOP/s    speedup
+--------------------------------------------------------------
+naive (ref)     yes        1016.245        3.30      1.00x
+simd            yes         148.311       22.62      6.85x

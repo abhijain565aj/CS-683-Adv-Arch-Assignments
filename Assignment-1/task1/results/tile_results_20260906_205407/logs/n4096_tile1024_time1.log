@@ -1,0 +1,8 @@
+$ taskset -c 0 /tmp/conv_tile_sweep_stkgbt_a/conv_1024 tile 4096 4096 5 1234
+CS683 PA-1 Task 1  2D convolution optimization harness
+
+=== Workload  H=4096 W=4096 K=5 seed=1234 (not graded) ===
+stage           correct    time(ms)     GFLOP/s    speedup
+--------------------------------------------------------------
+naive (ref)     yes         205.159        4.09      1.00x
+tile            yes         183.307        4.58      1.12x

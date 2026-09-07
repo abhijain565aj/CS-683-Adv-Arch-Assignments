@@ -1,0 +1,2 @@
+$ taskset -c 0 perf stat --no-big-num -x ';' -r 3 -e cpu_core/instructions/ /tmp/conv_simd_sweep_l9fdfdz8/perf_256 simd 8192 8192 5 1234
+40214257547;;cpu_core/instructions/;0.00%;2392819986;100.00;;

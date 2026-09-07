@@ -1,0 +1,22 @@
+{
+  "cpu": 0,
+  "repeats": 3,
+  "seed": 1234,
+  "image_sizes": [
+    512,
+    1024,
+    2048,
+    4096,
+    8192
+  ],
+  "fixed_kernel": 5,
+  "kernel_sizes": [
+    3,
+    5,
+    7,
+    9
+  ],
+  "fixed_image": 2048,
+  "speedup": "Median of paired naive/stage time ratios",
+  "timing_source": "Rounded milliseconds printed by the assignment harness"
+}

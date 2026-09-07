@@ -1,0 +1,11 @@
+CS683 PA-1 Task 1  2D convolution optimization harness
+
+=== Workload  H=512 W=512 K=5 seed=1234 (not graded) ===
+stage           correct    time(ms)     GFLOP/s    speedup
+--------------------------------------------------------------
+naive (ref)     yes           3.008        4.36      1.00x
+reorder         yes           1.584        8.27      1.90x
+unroll          yes           0.806       16.26      3.73x
+tile            yes           1.856        7.06      1.62x
+simd            yes           0.334       39.22      9.00x
+optimized       yes           0.149       88.22     20.24x

@@ -1,0 +1,3 @@
+$ taskset -c 0 perf stat --no-big-num -x ';' -r 3 -e '{cpu_core/instructions/,cpu_core/mem_load_retired.l1_miss/}' /tmp/conv_tile_sweep_stkgbt_a/perf_128 tile 2048 2048 5 1234
+16371899942;;cpu_core/instructions/;0.00%;867383548;100.00;;
+110053406;;cpu_core/mem_load_retired.l1_miss/;0.32%;867383548;100.00;;
