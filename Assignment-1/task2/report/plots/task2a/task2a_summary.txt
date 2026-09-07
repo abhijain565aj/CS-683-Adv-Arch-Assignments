@@ -1,19 +1,19 @@
 Input CSVs: task2a_results_hw_on.csv, task2a_results_hw_off.csv
 Hardware-prefetch labels: off, on
 
-Best prefetch distance in the distance sweep (geometric mean across sizes): 16 floats = 1 cache lines
-Best prefetch level in the level sweep (geometric mean across sizes): T0
+Best prefetch distance in the distance sweep (geometric mean across sizes): 32 floats = 2 cache lines
+Best prefetch level in the level sweep (geometric mean across sizes): T1
 
 Best collected software-prefetch configuration per matrix size:
   [off]
-    N=128: 1.6748x, distance=16 floats, hint=T0, time=0.4116 ms
-    N=256: 1.7845x, distance=64 floats, hint=T0, time=3.5003 ms
-    N=512: 1.8789x, distance=16 floats, hint=T1, time=28.2068 ms
-    N=1024: 1.9419x, distance=16 floats, hint=T2, time=230.1749 ms
-    N=2048: 2.0509x, distance=16 floats, hint=T1, time=1839.2503 ms
+    N=128: 1.6996x, distance=16 floats, hint=T1, time=0.4130 ms
+    N=256: 1.8003x, distance=16 floats, hint=T1, time=3.4508 ms
+    N=512: 1.8825x, distance=16 floats, hint=T0, time=28.1323 ms
+    N=1024: 1.9456x, distance=16 floats, hint=T2, time=227.5796 ms
+    N=2048: 2.0849x, distance=16 floats, hint=T2, time=1868.4863 ms
   [on]
-    N=128: 0.7586x, distance=128 floats, hint=T1, time=0.9001 ms
-    N=256: 0.8197x, distance=256 floats, hint=T1, time=7.5827 ms
-    N=512: 0.8395x, distance=512 floats, hint=NTA, time=63.5991 ms
-    N=1024: 0.8699x, distance=16 floats, hint=T0, time=510.8101 ms
-    N=2048: 0.8981x, distance=64 floats, hint=T0, time=4151.3511 ms
+    N=128: 1.8040x, distance=16 floats, hint=NTA, time=0.4116 ms
+    N=256: 1.7553x, distance=16 floats, hint=T1, time=3.4766 ms
+    N=512: 1.9187x, distance=64 floats, hint=T1, time=28.2706 ms
+    N=1024: 2.0067x, distance=256 floats, hint=T2, time=228.7783 ms
+    N=2048: 2.0702x, distance=64 floats, hint=T1, time=1864.7300 ms
