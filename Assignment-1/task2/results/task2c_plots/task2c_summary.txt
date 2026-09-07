@@ -1,0 +1,20 @@
+Task 2C summary
+Primary HW-prefetch dataset used for parameter plots: on
+Focus size for counter plots: N=2048
+
+Hardware prefetch: off
+  N=128: best=18.6403x, width=256, distance=512, hint=T0, time=0.0520 ms
+  N=256: best=16.2638x, width=256, distance=32, hint=T0, time=0.4335 ms
+  N=512: best=13.1260x, width=256, distance=32, hint=T0, time=4.5089 ms
+  N=1024: best=15.7344x, width=256, distance=512, hint=T0, time=30.3011 ms
+  N=2048: best=15.0851x, width=256, distance=16, hint=T0, time=269.2526 ms
+
+Hardware prefetch: on
+  N=128: best=19.3976x, width=256, distance=256, hint=T0, time=0.0528 ms
+  N=256: best=19.4240x, width=256, distance=16, hint=T0, time=0.4321 ms
+  N=512: best=14.4554x, width=256, distance=256, hint=T1, time=3.9498 ms
+  N=1024: best=15.8160x, width=256, distance=512, hint=T0, time=30.3038 ms
+  N=2048: best=15.1012x, width=256, distance=16, hint=T0, time=268.6309 ms
+
+Best prefetch hint by geometric mean: T0 (1.0333x vs no-SW)
+Best prefetch distance by geometric mean: 256 floats (1.0333x vs no-SW)
