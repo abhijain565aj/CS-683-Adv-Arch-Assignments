@@ -1,0 +1,40 @@
+% ============================================================
+% TASK 1A: Understanding the provided IP-stride prefetcher
+% ============================================================
+\section{Task 1A: Understanding the IP-Stride Prefetcher}
+
+\subsection{Purpose and Scope}
+The assignment asks us to read and understand the supplied IP-stride prefetcher implementation at \texttt{prefetcher/ip\_stride.l1d\_pref}. Document the behavior of the provided code rather than presenting a generic description alone.
+
+\subsection{Code Walkthrough}
+\begin{itemize}
+    \item \textbf{Per-IP state:} \TODO{Identify the table/entry fields used to track instruction pointers, last address, stride, confidence, or equivalent state. Use names from the supplied source.}
+    \item \textbf{Training/update:} \TODO{Describe exactly when an entry is allocated or updated and how a stride is calculated.}
+    \item \textbf{Prediction rule:} \TODO{Describe the conditions under which a prefetch is issued and how the target address is computed.}
+    \item \textbf{Confidence/state transitions:} \TODO{Explain the actual confidence mechanism and what happens when an observed stride changes.}
+    \item \textbf{Safety checks:} \TODO{Describe page-boundary checks, address checks, and degree/distance limits present in the code.}
+    \item \textbf{Reported statistics:} \TODO{Identify relevant counters and their definitions in this repository version.}
+\end{itemize}
+
+\subsection{Control Flow / State Diagram}
+\begin{figure}[H]\centering
+\evidencebox[4.5cm]{\TODO{Insert a flowchart showing lookup by IP, state update, confidence decision, target generation, page-boundary validation, and prefetch issue.}}
+\caption{Control flow of the supplied IP-stride prefetcher.}\label{fig:ip_stride_flow}
+\end{figure}
+
+\subsection{Example Walkthrough}
+\TODO{Walk through a short address sequence for one IP. Show the observed deltas, internal state after each access, and whether a prefetch is issued. Use an example consistent with the implementation.}
+\begin{table}[H]\centering
+\caption{Example per-access state evolution (fill using the code's actual fields).}
+\begin{tabular}{ccccc}
+\toprule Access index & Address / block & Observed stride & State / confidence & Prefetch action \\
+\midrule
+1 & \TODO{value} & -- & \TODO{state} & \TODO{action} \\
+2 & \TODO{value} & \TODO{value} & \TODO{state} & \TODO{action} \\
+3 & \TODO{value} & \TODO{value} & \TODO{state} & \TODO{action} \\
+4 & \TODO{value} & \TODO{value} & \TODO{state} & \TODO{action} \\
+\bottomrule
+\end{tabular}\end{table}
+
+\subsection{Understanding and Observations}
+\TODO{Explain the strengths and limitations of a constant-stride predictor for repeating non-uniform patterns. Tie the explanation to the supplied implementation and the SPP design in Task 1B.}

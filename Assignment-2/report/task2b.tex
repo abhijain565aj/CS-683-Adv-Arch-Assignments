@@ -1,0 +1,84 @@
+% ============================================================
+% TASK 2B: Dynamic I-RRIP
+% ============================================================
+\section{Task 2B: Dynamic I-RRIP}
+
+\subsection{Design and Set-Dueling Mechanism}
+Dynamic I-RRIP switches between instruction-conscious replacement and regular RRIP based on observed workload behavior. The assignment suggests set dueling with selected leader sets that always use RRIP, tracking instruction and non-instruction accesses and misses, and comparing a decision statistic with a threshold.
+
+\TODO{Describe the set-indexing rule for leader sets, number/fraction of leader sets, how leader sets stay on RRIP, which sets use the follower decision, and how often the decision is updated.}
+
+\subsection{Decision Statistic}
+If the implementation follows the assignment's example, document the exact statistic and how its inputs are collected. The example in the assignment is:
+\[
+R = \frac{A_I + M_I}{A_{\mathrm{total}} + M_{\mathrm{total}}},
+\]
+where $A_I$ and $M_I$ denote instruction accesses and misses. If a modified formula is used, write the exact implemented formula here.
+\begin{table}[H]\centering
+\caption{Dynamic policy decision logic.}
+\begin{tabularx}{\linewidth}{p{0.28\linewidth}X}
+\toprule Item & Implemented choice and rationale \\
+\midrule
+Decision formula & \TODO{formula, variables, normalization, and zero-denominator handling} \\
+Threshold / thresholds tested & \TODO{list values} \\
+Decision direction & \TODO{which mode is selected above/below threshold} \\
+Leader-set count & \TODO{absolute count and percentage of cache sets} \\
+Leader-set placement & \TODO{how leader sets are selected / interleaved} \\
+Update interval & \TODO{every access, miss, epoch, or other trigger} \\
+Counter widths / overflow & \TODO{counter widths, reset/saturation behavior} \\
+\bottomrule
+\end{tabularx}\end{table}
+
+\subsection{Threshold Sensitivity Study}
+The assignment requires testing at least five threshold values if using a threshold-based decision. Keep the trace set, simulation configuration, and other parameters fixed while sweeping the threshold.
+\begin{table}[H]\centering
+\caption{Threshold sensitivity results. Report per-trace results or clearly state the aggregation method.}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrrrrrr}
+\toprule Threshold & IPC & Speedup & L2C Load MPKI & L2I Load MPKI & L2D Load MPKI & Chosen mode share (\%) \\
+\midrule
+\TODO{$\tau_1$} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{$\tau_2$} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{$\tau_3$} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{$\tau_4$} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{$\tau_5$} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
+\bottomrule
+\end{tabular}%
+}\end{table}
+
+\begin{figure}[H]\centering
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{IPC or speedup vs. decision threshold}\caption{Performance sensitivity}\end{subfigure}\hfill
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2C, L2I, and L2D load MPKI vs. threshold}\caption{MPKI sensitivity}\end{subfigure}
+\caption{Sensitivity to the dynamic decision parameter. Mark the selected operating point.}\label{fig:threshold_sensitivity}
+\end{figure}
+
+\subsection{Final Configuration Results}
+\begin{table}[H]\centering
+\caption{Task 2B final dynamic I-RRIP results.}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{llrrrrr}
+\toprule Trace & Policy & IPC & Speedup & L2C Load MPKI & L2I Load MPKI & L2D Load MPKI \\
+\midrule
+\TODO{trace} & RRIP baseline & \TODO{value} & 1.00$\times$ & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{trace} & Static I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{trace} & Dynamic I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{add rows} & & & & & & \\
+\bottomrule
+\end{tabular}%
+}\end{table}
+
+\begin{figure}[H]\centering
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{IPC per trace: RRIP, I-RRIP, and dynamic I-RRIP}\caption{IPC}\end{subfigure}\hfill
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{Speedup per trace against RRIP baseline}\caption{Speedup}\end{subfigure}
+\vspace{0.6em}
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2C load MPKI per trace and policy}\caption{L2C load MPKI}\end{subfigure}\hfill
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2 instruction-load MPKI per trace and policy}\caption{L2 instruction MPKI}\end{subfigure}
+\vspace{0.6em}
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2 data-load MPKI per trace and policy}\caption{L2 data MPKI}\end{subfigure}
+\caption{Required Task 2B performance metrics.}\label{fig:dynamic_irrip_results}
+\end{figure}
+
+\subsection{Analysis and Rationale}
+\TODO{Explain why the chosen leader-set count is representative, how the threshold was selected from the sensitivity study, and why the selected configuration generalizes across traces. Discuss trade-offs and regressions as well as wins.}

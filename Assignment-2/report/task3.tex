@@ -1,0 +1,75 @@
+% ============================================================
+% TASK 3: Incorporating SPP with Dynamic I-RRIP
+% ============================================================
+\section{Task 3: Incorporating SPP with Dynamic I-RRIP}
+
+\subsection{Motivation and Integration}
+Task 3 adds prefetch awareness to the dynamic I-RRIP replacement policy, with the goal of outperforming both standalone SPP and standalone dynamic I-RRIP in IPC. The assignment hint is to inspect whether the packet type is \texttt{PREFETCH}.
+
+\TODO{Explain how prefetch-originated lines are recognized in this ChampSim version and how that signal changes insertion, promotion, or victim-selection behavior. Be exact about which cases are handled differently.}
+
+\subsection{Prefetch-Aware Replacement Logic}
+\begin{itemize}
+    \item \textbf{Prefetch insertion:} \TODO{Describe initial RRPV / priority for prefetched lines and the rationale.}
+    \item \textbf{Demand hit on prefetched line:} \TODO{Explain any promotion/usefulness behavior and interaction with instruction-vs-data classification.}
+    \item \textbf{Unused prefetch eviction:} \TODO{Explain how an unused prefetched line is prevented from displacing useful demand-fetched lines, if applicable.}
+    \item \textbf{Dynamic mode interaction:} \TODO{Explain the interaction between set-dueling decision, I-RRIP mode, and prefetch awareness.}
+    \item \textbf{Corner cases:} \TODO{Discuss a prefetch packet also marked as instruction/data, if relevant, and the ordering of conditions.}
+\end{itemize}
+
+\begin{figure}[H]\centering
+\evidencebox[4.3cm]{\TODO{Insert a decision-flow diagram showing packet type, instruction/data class, dynamic RRIP/I-RRIP mode, insertion state, and hit promotion.}}
+\caption{Prefetch-aware dynamic I-RRIP decision flow.}\label{fig:prefetch_aware_flow}
+\end{figure}
+
+\subsection{Experimental Results}
+Report IPC, speedup, prefetch accuracy, coverage, and load MPKI for L1D, L2C, L2 instruction, and L2 data as applicable. Prefetch accuracy and coverage are L1D-prefetcher metrics; MPKI should be reported separately for each requested cache/access type. Compare at least baseline, standalone SPP, standalone dynamic I-RRIP, and combined SPP + dynamic I-RRIP.
+
+\begin{table}[H]\centering
+\caption{Task 3: IPC, speedup, prefetch quality, and L1D load MPKI.}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{llrrrrr}
+\toprule Trace & Configuration & IPC & Speedup & Acc. (\%) & Coverage (\%) & L1D Load MPKI \\
+\midrule
+\TODO{trace} & Baseline & \TODO{value} & 1.00$\times$ & N/A & N/A & \TODO{value} \\
+\TODO{trace} & SPP only & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{trace} & Dynamic I-RRIP only & \TODO{value} & \TODO{value} & N/A & N/A & \TODO{value} \\
+\TODO{trace} & SPP + Dynamic I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{add rows} & & & & & & \\
+\bottomrule
+\end{tabular}%
+}\end{table}
+
+\begin{table}[H]\centering
+\caption{Task 3: L2 load MPKI by cache / access type.}
+\small
+\begin{tabular}{llrrr}
+\toprule Trace & Configuration & L2C Load MPKI & L2I Load MPKI & L2D Load MPKI \\
+\midrule
+\TODO{trace} & Baseline & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{trace} & SPP only & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{trace} & Dynamic I-RRIP only & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{trace} & SPP + Dynamic I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{add rows} & & & & \\
+\bottomrule
+\end{tabular}\end{table}
+\textit{TODO: Check whether this ChampSim build exposes distinct L2 instruction and data load MPKI counters. If counter names differ, identify the exact names; do not label an aggregate counter as a split counter.}
+
+\begin{figure}[H]\centering
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{IPC per trace: baseline, SPP, dynamic I-RRIP, and combined}\caption{IPC}\end{subfigure}\hfill
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{Speedup per trace against the declared baseline}\caption{Speedup}\end{subfigure}
+\vspace{0.6em}
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{Prefetch accuracy and L1D coverage by trace}\caption{Prefetch accuracy / coverage}\end{subfigure}\hfill
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L1D load MPKI by configuration}\caption{L1D load MPKI}\end{subfigure}
+\vspace{0.6em}
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2C load MPKI by configuration}\caption{L2C load MPKI}\end{subfigure}\hfill
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2 instruction and data load MPKI by configuration}\caption{L2 instruction/data MPKI}\end{subfigure}
+\caption{Required Task 3 performance, prefetch-quality, and cache-miss metrics.}\label{fig:task3_results}
+\end{figure}
+
+\subsection{Analysis: Does the Combined Design Meet the Goal?}
+\TODO{Compare the combined IPC against both SPP-only and dynamic-I-RRIP-only on every trace. The assignment asks the combined design to outperform both in IPC; clearly identify whether this target was met universally or only on some traces.}
+
+\subsection{Trade-offs and Limitations}
+\TODO{Discuss whether prefetch-aware replacement improved or reduced L2 instruction/data behavior, how unused prefetches were treated, and cases where accuracy, coverage, MPKI, and IPC did not move together.}

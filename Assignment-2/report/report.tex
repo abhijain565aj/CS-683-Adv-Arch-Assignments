@@ -1,0 +1,142 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,margin=0.85in]{geometry}
+\usepackage{graphicx,subcaption,float,booktabs,array,enumitem,microtype,xcolor,listings,amsmath,amssymb,tabularx}
+\usepackage[hidelinks]{hyperref}
+\setlist{nosep,leftmargin=*}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setcounter{tocdepth}{2}
+\renewcommand{\arraystretch}{1.15}
+
+% Common commands adapted from the supplied Assignment 1 report.
+\newcommand{\TODO}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\evidencebox}[2][4cm]{\fbox{\parbox[c][#1][c]{0.92\linewidth}{\centering\textbf{EVIDENCE / DIAGRAM PLACEHOLDER}\\[3pt]#2}}}
+\newcommand{\plotplaceholder}[2][4cm]{\fbox{\parbox[c][#1][c]{0.94\linewidth}{\centering\textbf{PLOT PLACEHOLDER}\\[4pt]#2\\[4pt]\small Replace this box with the generated plot; retain the caption and label.}}}
+\newcommand{\smallplotplaceholder}[1]{\plotplaceholder[3.1cm]{#1}}
+\newcommand{\StudentOne}{Abhi Jain (23B0903)}
+\newcommand{\StudentTwo}{Deshank Pratap Singh (23B0938)}
+\newcommand{\StudentThree}{Dhruv Jain (23B0942)}
+\newcommand{\StudentFour}{Sameer Arvind Patil (23B1035)}
+
+\begin{document}
+\begin{titlepage}
+    \centering
+    {\scshape\bfseries\Huge Advanced Computer Architecture\par}
+    \vspace{0.2cm}
+    {\scshape\bfseries\Huge (CS-683)\par}
+    \vspace{0.8cm}
+    {\huge \textbf{Programming Assignment 2\\Report}\par}
+    \vspace{0.8cm}
+    {\Large Data Prefetching and Cache Replacement Policies\par}
+    \vspace{1cm}
+    {\Large \StudentOne\par}
+    {\Large \StudentTwo\par}
+    {\Large \StudentThree\par}
+    {\Large \StudentFour\par}
+    \vfill
+    {\large Autumn 2026\par}
+    {\large \textit{Report template: resolve all red TODOs and replace plot boxes before submission.}\par}
+\end{titlepage}
+\tableofcontents
+\newpage
+
+\section{Overview and Experimental Methodology}
+\subsection{Objectives}
+This report documents the implementation and evaluation of the Assignment 2 cache and prefetching mechanisms in ChampSim. The report is organized into Task 1A (understanding the provided IP-stride prefetcher), Task 1B (Stride Pattern Prefetching, SPP), Task 2A (instruction-conscious RRIP, I-RRIP), Task 2B (dynamic I-RRIP), and Task 3 (combining SPP with dynamic I-RRIP).
+
+\subsection{Experimental Setup}
+\begin{table}[H]\centering
+\caption{Simulation environment and configuration. Fill with the exact configuration used.}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.32\linewidth}X}
+\toprule Parameter & Value / Notes \\
+\midrule
+Simulator & ChampSim; \TODO{record repository commit/hash} \\
+Compiler and version & \TODO{compiler/version and relevant build flags} \\
+Host machine & \TODO{CPU, memory, OS, if relevant} \\
+Warmup instructions & 25M (per assignment specification) \\
+Simulation instructions & 25M (per assignment specification) \\
+Trace set & \TODO{list all provided traces evaluated} \\
+Baseline prefetcher & \TODO{state the no-prefetching / baseline configuration} \\
+Baseline replacement policy & \TODO{state the baseline policy} \\
+Cache configuration & \TODO{record non-default cache settings; cite config files} \\
+Repetitions / variability & \TODO{number of runs and whether results were deterministic} \\
+\bottomrule
+\end{tabularx}\end{table}
+
+\subsection{Metrics and Definitions}
+Use ChampSim's reported statistics where available. State units and use the same baseline definition consistently for all traces.
+\begin{itemize}
+    \item \textbf{IPC:} instructions per cycle as reported by ChampSim.
+    \item \textbf{Speedup:} $\displaystyle \frac{\mathrm{IPC}_{\mathrm{configuration}}}{\mathrm{IPC}_{\mathrm{baseline}}}$. \TODO{state precisely which baseline is used for each comparison}.
+    \item \textbf{MPKI:} misses per thousand instructions; report the relevant cache and access type (e.g., L1D load MPKI, L2 instruction-load MPKI, L2 data-load MPKI).
+    \item \textbf{Prefetch accuracy:} useful prefetches divided by issued prefetches, according to the simulator statistic definition.
+    \item \textbf{L1D coverage:} $\displaystyle \frac{M_{\mathrm{baseline}}-M_{\mathrm{prefetcher}}}{M_{\mathrm{baseline}}}$, where $M$ denotes L1D load misses for the same workload and instruction count.
+\end{itemize}
+\textit{TODO: Confirm the exact ChampSim statistic names and definitions for accuracy, coverage, and each MPKI column. Do not mix counts and normalized metrics.}
+
+\subsection{Benchmark / Trace Inventory}
+\begin{table}[H]\centering
+\caption{Traces included in the evaluation. Add one row per trace.}
+\begin{tabular}{lll}
+\toprule Trace name & Workload description (if known) & Runs completed? \\
+\midrule
+\TODO{trace 1} & \TODO{description} & $\square$ Yes / $\square$ No \\
+\TODO{trace 2} & \TODO{description} & $\square$ Yes / $\square$ No \\
+\TODO{trace 3} & \TODO{description} & $\square$ Yes / $\square$ No \\
+\TODO{add rows as needed} & & \\
+\bottomrule
+\end{tabular}\end{table}
+
+\subsection{Reproducibility and Correctness Checks}
+\begin{itemize}
+    \item $\square$ Verify that warmup and simulation instruction counts are 25M each.
+    \item $\square$ Record exact commands/configurations and save raw simulator output for every trace.
+    \item $\square$ Check that every configuration uses identical traces and instruction counts.
+    \item $\square$ Verify every reported table value against raw output or a documented calculation.
+    \item $\square$ Keep code changes and results aligned with the repository commit history.
+\end{itemize}
+\TODO{Describe failed runs, excluded traces, or deviations from the specified setup. If none, explicitly write “None.”}
+
+\newpage\input{task1a}
+\newpage\input{task1b}
+\newpage\input{task2a}
+\newpage\input{task2b}
+\newpage\input{task3}
+\newpage
+
+\section{Overall Comparison and Conclusion}
+\subsection{Across-Task Summary}
+\TODO{Summarize the best-performing configuration per trace and compare baseline, SPP, I-RRIP, dynamic I-RRIP, and the combined design. Tie comparisons to measured data.}
+\begin{table}[H]\centering
+\caption{Overall results summary. Add rows for each trace or provide a separate table per trace.}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lccccc}
+\toprule Configuration & IPC & Speedup & L1D Load MPKI & L2 Load MPKI & Notes \\
+\midrule
+Baseline & \TODO{value} & 1.00$\times$ & \TODO{value} & \TODO{value} & \TODO{baseline details} \\
+IP-stride & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{if measured} \\
+SPP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{result} \\
+I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{result} \\
+Dynamic I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{result} \\
+SPP + Dynamic I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{result} \\
+\bottomrule
+\end{tabular}%
+}\end{table}
+
+\subsection{Limitations and Future Work}
+\TODO{Discuss measurement limitations, outlier traces, storage/performance trade-offs, untested alternatives, and follow-up work. Do not claim an effect unsupported by experiments.}
+
+\subsection{Submission Checklist}
+\begin{itemize}
+    \item $\square$ Every red TODO has been resolved or intentionally removed.
+    \item $\square$ Every plot placeholder has been replaced with a real plot (or removed if inapplicable).
+    \item $\square$ Tables contain measured values with units and stated baselines.
+    \item $\square$ Figures have descriptive captions, axes, legends, and readable labels.
+    \item $\square$ Storage overhead includes a bit-level breakdown and total.
+    \item $\square$ Task 2B sensitivity includes at least five decision-parameter settings.
+    \item $\square$ Results and conclusions agree with the implementation and raw outputs.
+    \item $\square$ The final report compiles; no missing-figure boxes remain.
+\end{itemize}
+\end{document}

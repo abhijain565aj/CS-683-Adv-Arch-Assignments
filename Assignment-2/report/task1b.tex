@@ -1,0 +1,85 @@
+% ============================================================
+% TASK 1B: Stride Pattern Prefetcher (SPP)
+% ============================================================
+\section{Task 1B: Stride Pattern Prefetcher (SPP)}
+
+\subsection{Design Requirements}
+The L1D SPP should classify per-IP accesses into uniform constant-stride behavior and repeating non-uniform stride sequences. Uniform-stride prediction should be prioritized, with transition or fallback to non-uniform prediction when warranted. The implementation should maintain a stride-history signature for non-uniform patterns, support a degree greater than one, use accuracy-based throttling, and keep requests within the same OS page.
+
+\subsection{Data Structures and Prediction Algorithm}
+\TODO{Describe the SPP table(s), indexing/tagging strategy, state stored per IP, signature construction, signature-to-next-stride lookup, confidence/state transitions, and the policy for switching between uniform and non-uniform prediction. Use field names and logic of your implementation.}
+\begin{figure}[H]\centering
+\evidencebox[4.3cm]{\TODO{Insert a block diagram or pseudocode flow: IP lookup -> update history -> uniform-stride test -> signature lookup -> choose degree -> page check -> issue prefetches.}}
+\caption{Implemented SPP lookup and prediction pipeline.}\label{fig:spp_pipeline}
+\end{figure}
+
+\subsection{Accuracy-Based Throttling}
+\TODO{Define the accuracy window/counters, update events, and exact thresholds used. Explain how the degree changes at each threshold and whether the degree is bounded.}
+\begin{table}[H]\centering
+\caption{Accuracy-based degree selection used by the SPP. Replace example ranges with the actual policy.}
+\begin{tabular}{ccc p{0.42\linewidth}}
+\toprule Accuracy range & Degree & Action / rationale \\
+\midrule
+\TODO{range 1} & \TODO{degree} & \TODO{rationale} \\
+\TODO{range 2} & \TODO{degree} & \TODO{rationale} \\
+\TODO{range 3} & \TODO{degree} & \TODO{rationale} \\
+\bottomrule
+\end{tabular}\end{table}
+
+\subsection{Storage Overhead: Bit-Level Accounting}
+Count all state allocated by the prefetcher, including table entries, tags, counters, signatures, valid bits, global counters, and auxiliary structures. State the number of entries and bit width of every field. If reporting logical bit storage rather than actual implementation memory, say so explicitly.
+\begin{table}[H]\centering
+\caption{Bit-level storage breakdown for the implemented SPP. Add rows for every stored field.}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{lrrrr}
+\toprule Structure / field & Entries & Bits per entry & Total bits & Notes \\
+\midrule
+IP / tag & \TODO{N} & \TODO{bits} & \TODO{N times bits} & \TODO{tag definition} \\
+Last block / address state & \TODO{N} & \TODO{bits} & \TODO{total} & \TODO{field width} \\
+Stride / confidence state & \TODO{N} & \TODO{bits} & \TODO{total} & \TODO{field width} \\
+Signature/history state & \TODO{N} & \TODO{bits} & \TODO{total} & \TODO{encoding} \\
+Auxiliary prediction table(s) & \TODO{N} & \TODO{bits} & \TODO{total} & \TODO{entry format} \\
+Global counters / metadata & 1 & \TODO{bits} & \TODO{total} & \TODO{what is counted} \\
+\midrule
+\textbf{Total logical storage} & & & \textbf{\TODO{sum bits}} & \TODO{convert to bytes / KiB} \\
+\bottomrule
+\end{tabular}%
+}\end{table}
+\TODO{Show the explicit sum, e.g. $B_{total}=\sum_i N_i b_i+B_{global}$, convert bits to bytes/KiB, and confirm no implementation fields have been omitted.}
+
+\subsection{Experimental Results}
+Use matched per-trace runs for baseline/no-prefetching, provided IP-stride, and SPP where available. Report IPC, speedup, L1D load MPKI, prefetch accuracy, and L1D coverage. Define exactly which configuration is the speedup baseline.
+\begin{table}[H]\centering
+\caption{Task 1B: per-trace prefetcher metrics. Add one row per trace and configuration.}
+\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{llrrrrr}
+\toprule Trace & Configuration & IPC & Speedup & L1D Load MPKI & Accuracy (\%) & Coverage (\%) \\
+\midrule
+\TODO{trace} & No prefetch & \TODO{value} & 1.00$\times$ & \TODO{value} & N/A & N/A \\
+\TODO{trace} & IP-stride & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{trace} & SPP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
+\TODO{add rows} & & & & & & \\
+\bottomrule
+\end{tabular}%
+}\end{table}
+
+\begin{figure}[H]\centering
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{IPC by trace: no-prefetch baseline, IP-stride, and SPP}\caption{IPC}\end{subfigure}\hfill
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{Speedup by trace; baseline shown at $1.0\times$}\caption{Speedup}\end{subfigure}
+\vspace{0.6em}
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L1D load MPKI by trace and configuration}\caption{L1D load MPKI}\end{subfigure}\hfill
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{Prefetch accuracy (\%) by trace and prefetcher}\caption{Prefetch accuracy}\end{subfigure}
+\vspace{0.6em}
+\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L1D coverage (\%) by trace and prefetcher}\caption{L1D coverage}\end{subfigure}
+\caption{Required Task 1B performance and prefetch-quality plots. Replace every boxed placeholder with the generated plot.}\label{fig:spp_results}
+\end{figure}
+
+\subsection{Analysis and Design Rationale}
+\begin{enumerate}
+    \item \textbf{Uniform vs. non-uniform behavior:} \TODO{Use traces/access patterns to explain where SPP improves over IP-stride and where it does not.}
+    \item \textbf{Threshold selection:} \TODO{Explain how the accuracy threshold was selected (for example, a measured sweep or controlled experiment).}
+    \item \textbf{Degree choices:} \TODO{Explain why each accuracy range uses its selected degree and discuss lead time, pollution, and bandwidth trade-offs.}
+    \item \textbf{Page-boundary correctness:} \TODO{Explain how the same-page constraint is enforced, including multi-degree predictions near a page end.}
+    \item \textbf{Storage/performance trade-off:} \TODO{Relate storage overhead to measured IPC, MPKI, accuracy, and coverage.}
+\end{enumerate}
