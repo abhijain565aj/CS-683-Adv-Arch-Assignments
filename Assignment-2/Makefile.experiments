@@ -1,0 +1,71 @@
+# Experiment orchestration. Run this file inside Assignment-2.
+
+PYTHON ?= python3
+RUNNER := $(PYTHON) experiment_runner.py
+TRACE_ARGS ?= --traces all
+WARMUP ?= 25000000
+SIMULATION ?= 25000000
+THRESHOLDS ?= 0.10,0.20,0.25,0.30,0.40
+
+.PHONY: help list build run-task1b run-task2a run-task2b run-task3 \
+        plot-task1b plot-task2a plot-task2b plot-task3 \
+        task1b task2a task2b task3 all clean-results
+
+help:
+	@echo "Use: make -f Makefile.experiments <target>"
+	@echo "  list          Show registered experiment configurations"
+	@echo "  build         Build the default baseline binary"
+	@echo "  run-task1b    Run baseline, IP-stride, and SPP"
+	@echo "  run-task2a    Run RRIP and I-RRIP"
+	@echo "  run-task2b    Run the five-threshold sensitivity sweep"
+	@echo "  run-task3     Run baseline, SPP, dynamic I-RRIP, and combined"
+	@echo "  task1b        Run Task 1B and generate plots"
+	@echo "  task2a        Run Task 2A and generate plots"
+	@echo "  task2b        Run Task 2B and generate plots"
+	@echo "  task3         Run Task 3 and generate plots"
+	@echo "  all           Run every task (long-running)"
+
+list:
+	$(RUNNER) list
+
+build:
+	./build_champsim.sh no lru baseline
+
+run-task1b:
+	$(RUNNER) run --task task1b $(TRACE_ARGS) --warmup $(WARMUP) --simulation $(SIMULATION)
+
+run-task2a:
+	$(RUNNER) run --task task2a $(TRACE_ARGS) --warmup $(WARMUP) --simulation $(SIMULATION)
+
+run-task2b:
+	$(RUNNER) run --task task2b $(TRACE_ARGS) --warmup $(WARMUP) --simulation $(SIMULATION) --thresholds $(THRESHOLDS)
+
+run-task3:
+	$(RUNNER) run --task task3 $(TRACE_ARGS) --warmup $(WARMUP) --simulation $(SIMULATION) --thresholds $(THRESHOLDS)
+
+plot-task1b:
+	$(RUNNER) plot --task task1b
+
+plot-task2a:
+	$(RUNNER) plot --task task2a
+
+plot-task2b:
+	$(RUNNER) plot --task task2b
+
+plot-task3:
+	$(RUNNER) plot --task task3
+
+task1b: run-task1b plot-task1b
+task2a: run-task2a plot-task2a
+task2b: run-task2b plot-task2b
+task3: run-task3 plot-task3
+
+all: task1b task2a task2b task3
+
+clean-results:
+	rm -rf report/logs
+	rm -f report/data/task1b_results.csv report/data/task1b_raw.json
+	rm -f report/data/task2a_results.csv report/data/task2a_raw.json
+	rm -f report/data/task2b_sensitivity.csv report/data/task2b_raw.json
+	rm -f report/data/task3_results.csv report/data/task3_raw.json
+	rm -rf report/plots/task1b/* report/plots/task2a/* report/plots/task2b/* report/plots/task3/*
