@@ -47,8 +47,13 @@ BINARY_NAME=$3
 NUM_CORE=1        # tested up to 8-core system
 
 ############## Some useful macros ###############
-BOLD=$(tput bold)
-NORMAL=$(tput sgr0)
+if [ -t 1 ] && [ -t 2 ] && [ -n "${TERM:-}" ]; then
+    BOLD=$(tput bold)
+    NORMAL=$(tput sgr0)
+else
+    BOLD=""
+    NORMAL=""
+fi
 #################################################
 
 # Sanity check
