@@ -485,7 +485,8 @@ void MEMORY_CONTROLLER::process(PACKET_QUEUE *queue)
         else { // data bus is busy, the available bank cycle time is fast-forwarded for faster simulation
 
 #if 0
-            // TODO: what if we can service prefetching request without dbus congestion?
+            // TODO Task 3: evaluate whether prefetch-aware replacement and
+            // bandwidth throttling should avoid DBUS congestion.
             // can we have more timely prefetches and improve performance?
             if ((op_type == PREFETCH) || (op_type == LOAD)) {
                 // just magically return prefetch request (no need to update data bus cycle time)

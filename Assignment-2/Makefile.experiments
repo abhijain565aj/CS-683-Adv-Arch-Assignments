@@ -32,15 +32,19 @@ build:
 	./build_champsim.sh no lru baseline
 
 run-task1b:
+	# TODO Task 1B: implement SPP before expecting the full task to pass.
 	$(RUNNER) run --task task1b $(TRACE_ARGS) --warmup $(WARMUP) --simulation $(SIMULATION)
 
 run-task2a:
+	# TODO Task 2A: add the I-RRIP policy file before running this target.
 	$(RUNNER) run --task task2a $(TRACE_ARGS) --warmup $(WARMUP) --simulation $(SIMULATION)
 
 run-task2b:
+	# TODO Task 2B: add dynamic I-RRIP before running this target.
 	$(RUNNER) run --task task2b $(TRACE_ARGS) --warmup $(WARMUP) --simulation $(SIMULATION) --thresholds $(THRESHOLDS)
 
 run-task3:
+	# TODO Task 3: complete SPP and prefetch-aware dynamic I-RRIP first.
 	$(RUNNER) run --task task3 $(TRACE_ARGS) --warmup $(WARMUP) --simulation $(SIMULATION) --thresholds $(THRESHOLDS)
 
 plot-task1b:

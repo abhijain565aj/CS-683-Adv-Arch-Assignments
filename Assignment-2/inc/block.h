@@ -30,6 +30,8 @@ class BLOCK {
              instr_id;
 
     // replacement state
+    // TODO Task 2A: retain all instruction metadata required by I-RRIP.
+    // TODO Task 3: retain prefetch usefulness/origin state for eviction.
     uint32_t lru;
 
     BLOCK() {

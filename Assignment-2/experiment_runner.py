@@ -48,17 +48,22 @@ class Experiment:
 
 
 EXPERIMENTS: Dict[str, Experiment] = {
+    # TODO Task 1B: replace the SPP stub before running the SPP experiments.
     "baseline": Experiment("baseline", "task1b", "no", "lru", "No prefetch, LRU"),
     "ip_stride": Experiment("ip_stride", "task1b", "ip_stride", "lru", "IP-stride, LRU"),
     "spp": Experiment("spp", "task1b", "spp", "lru", "SPP, LRU"),
     "rrip": Experiment("rrip", "task2a", "no", "rrip", "No prefetch, RRIP"),
     "irrip": Experiment("irrip", "task2a", "no", "irrip", "Instruction-conscious RRIP"),
+    # TODO Task 2A: add replacement/irrip.l2c_repl.
     "dynamic_irrip": Experiment(
         "dynamic_irrip", "task2b", "no", "dynamic_irrip", "Dynamic I-RRIP"
     ),
+    # TODO Task 2B: add replacement/dynamic_irrip.l2c_repl and consume
+    # CHAMPSIM_THRESHOLD in the policy implementation.
     "combined": Experiment(
         "combined", "task3", "spp", "dynamic_irrip", "SPP with dynamic I-RRIP"
     ),
+    # TODO Task 3: use the completed SPP and prefetch-aware dynamic I-RRIP.
 }
 
 TASK_EXPERIMENTS = {

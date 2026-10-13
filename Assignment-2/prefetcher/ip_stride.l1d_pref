@@ -1,5 +1,7 @@
 #include "cache.h"
 
+// TODO Task 1A: use this implementation to document the supplied IP-stride
+// state, confidence behavior, page checks, and limitations before Task 1B.
 
 #define IP_TRACKER_COUNT 24
 #define PREFETCH_DEGREE 3
