@@ -1,5 +1,7 @@
-Trace/
-# 3 trace files from google drive
+traces/
+# 3 trace files from google drive saved as Tr{i}.gz
+
+bin/
 
 obj/
 # build files

@@ -75,3 +75,32 @@ sudo update-alternatives --config g++
 sudo update-alternatives --config gcc
 ```
 
+## Docker
+
+Use the Docker image for the assignment build. It installs GCC 7 and
+configures all default C and C++ compiler commands to use version 7.
+
+From the repository root, build the image using the provided Makefile:
+
+```bash
+make docker-build
+```
+
+Start the container using the provided Makefile target:
+
+```bash
+make docker-run
+```
+
+The command opens a shell at `/workspace`. Inside the container, move to
+Assignment 2 and verify the compiler:
+
+```bash
+cd Assignment-2
+g++ --version
+g++-7 --version
+./build_champsim.sh no lru baseline
+```
+
+All assignment compilation and linking should be performed inside this
+container using `g++-7`.
