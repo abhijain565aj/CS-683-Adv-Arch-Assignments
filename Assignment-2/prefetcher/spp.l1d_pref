@@ -1,26 +1,317 @@
 #include "cache.h"
 
+#define IP_TRACKER_COUNT 24
+#define PREFETCH_DEGREE 3
+#define MASK_IP 0xFF
+#define HISTORY_SIZE 4
+#define SIGNATURE_TABLE_SIZE 1024
+#define PREFETCH_TABLE_SIZE 512
+
 // TODO Task 1B: implement the Stride Pattern Prefetcher (SPP).
+
+class IP_TRACKER {
+  public:
+    uint64_t ip;
+    uint64_t last_cl_addr;
+    int64_t last_stride;
+    uint32_t lru;
+
+    int64_t history[HISTORY_SIZE];
+    int history_count;
+    int confidence;
+    bool valid;
+
+    IP_TRACKER() {
+        ip = 0;
+        last_cl_addr = 0;
+        last_stride = 0;
+        lru = 0;
+        history_count = 0;
+        confidence = 0;
+        valid = false;
+
+        for (int i=0; i<HISTORY_SIZE; i++)
+            history[i] = 0;
+    }
+};
+
+class SIGNATURE_ENTRY {
+  public:
+    uint64_t signature;
+    int64_t stride;
+    int confidence;
+    bool valid;
+
+    SIGNATURE_ENTRY() {
+        signature = 0;
+        stride = 0;
+        confidence = 0;
+        valid = false;
+    }
+};
+
+class PREFETCH_ENTRY {
+  public:
+    uint64_t addr;
+    int state;
+
+    PREFETCH_ENTRY() {
+        addr = 0;
+        state = 0;
+    }
+};
+
+IP_TRACKER trackers[IP_TRACKER_COUNT];
+SIGNATURE_ENTRY signatures[SIGNATURE_TABLE_SIZE];
+PREFETCH_ENTRY prefetched[PREFETCH_TABLE_SIZE];
+
+uint64_t issued = 0;
+uint64_t useful = 0;
+uint64_t last_issued = 0;
+uint64_t last_useful = 0;
+
+int degree = PREFETCH_DEGREE;
+
+uint64_t get_signature(int64_t history[])
+{
+    uint64_t signature = 0;
+
+    for (int i=0; i<HISTORY_SIZE; i++)
+        signature = signature * 31 + (uint64_t)history[i];
+
+    return signature;
+}
 
 void CACHE::l1d_prefetcher_initialize() 
 {
     std::cout << "------------------------------------------------" << std::endl;
     std::cout << "        Stride Pattern Prefetcher (SPP)         " << std::endl;
     std::cout << "------------------------------------------------" << std::endl;
+
+    for (int i=0; i<IP_TRACKER_COUNT; i++) {
+        trackers[i] = IP_TRACKER();
+        trackers[i].lru = i;
+    }
+
+    for (int i=0; i<SIGNATURE_TABLE_SIZE; i++)
+        signatures[i] = SIGNATURE_ENTRY();
+
+    for (int i=0; i<PREFETCH_TABLE_SIZE; i++)
+        prefetched[i] = PREFETCH_ENTRY();
+
+    issued = 0;
+    useful = 0;
+    last_issued = 0;
+    last_useful = 0;
+    degree = PREFETCH_DEGREE;
 }
 
 void CACHE::l1d_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache_hit, uint8_t type, uint8_t critical_ip_flag)
 {
     // TODO Task 1B: add SPP training, signature prediction, throttling, and
     // same-page degree-limited prefetch generation.
+
+    uint64_t cl_addr = addr >> LOG2_BLOCK_SIZE;
+    ip = ip & MASK_IP;
+
+    int pf_index = cl_addr % PREFETCH_TABLE_SIZE;
+
+    if (prefetched[pf_index].addr == cl_addr &&
+        prefetched[pf_index].state == 2) {
+
+        if (cache_hit) {
+            useful++;
+            prefetched[pf_index].state = 0;
+        }
+    }
+
+    int index = -1;
+
+    for (index=0; index<IP_TRACKER_COUNT; index++) {
+        if (trackers[index].valid && trackers[index].ip == ip)
+            break;
+    }
+
+    if (index == IP_TRACKER_COUNT) {
+
+        for (index=0; index<IP_TRACKER_COUNT; index++) {
+            if (!trackers[index].valid ||
+                trackers[index].lru == IP_TRACKER_COUNT-1)
+                break;
+        }
+
+        int old_lru = trackers[index].lru;
+
+        trackers[index] = IP_TRACKER();
+        trackers[index].valid = true;
+        trackers[index].ip = ip;
+        trackers[index].last_cl_addr = cl_addr;
+
+        for (int i=0; i<IP_TRACKER_COUNT; i++) {
+            if (i != index && trackers[i].lru < old_lru)
+                trackers[i].lru++;
+        }
+
+        trackers[index].lru = 0;
+        return;
+    }
+
+    int64_t stride = 0;
+
+    if (cl_addr > trackers[index].last_cl_addr)
+        stride = cl_addr - trackers[index].last_cl_addr;
+    else {
+        stride = trackers[index].last_cl_addr - cl_addr;
+        stride *= -1;
+    }
+
+    if (stride == 0)
+        return;
+
+    if (trackers[index].history_count == HISTORY_SIZE) {
+        uint64_t signature = get_signature(trackers[index].history);
+        int sig_index = signature % SIGNATURE_TABLE_SIZE;
+
+        if (!signatures[sig_index].valid ||
+            signatures[sig_index].signature != signature) {
+
+            signatures[sig_index].valid = true;
+            signatures[sig_index].signature = signature;
+            signatures[sig_index].stride = stride;
+            signatures[sig_index].confidence = 1;
+        }
+        else if (signatures[sig_index].stride == stride) {
+            if (signatures[sig_index].confidence < 7)
+                signatures[sig_index].confidence++;
+        }
+        else {
+            signatures[sig_index].stride = stride;
+            signatures[sig_index].confidence = 1;
+        }
+    }
+
+    if (stride == trackers[index].last_stride) {
+        if (trackers[index].confidence < 7)
+            trackers[index].confidence++;
+    }
+    else
+        trackers[index].confidence = 0;
+
+    trackers[index].last_stride = stride;
+
+    for (int i=0; i<HISTORY_SIZE-1; i++)
+        trackers[index].history[i] = trackers[index].history[i+1];
+
+    trackers[index].history[HISTORY_SIZE-1] = stride;
+
+    if (trackers[index].history_count < HISTORY_SIZE)
+        trackers[index].history_count++;
+
+    int64_t history[HISTORY_SIZE];
+
+    for (int i=0; i<HISTORY_SIZE; i++)
+        history[i] = trackers[index].history[i];
+
+    uint64_t next_cl_addr = cl_addr;
+
+    for (int i=0; i<degree; i++) {
+        int64_t next_stride = 0;
+
+        if (trackers[index].confidence >= 1)
+            next_stride = stride;
+        else if (trackers[index].history_count == HISTORY_SIZE) {
+            uint64_t signature = get_signature(history);
+            int sig_index = signature % SIGNATURE_TABLE_SIZE;
+
+            if (signatures[sig_index].valid &&
+                signatures[sig_index].signature == signature &&
+                signatures[sig_index].confidence >= 2)
+                next_stride = signatures[sig_index].stride;
+        }
+
+        if (next_stride == 0)
+            break;
+
+        int64_t candidate = (int64_t)next_cl_addr + next_stride;
+
+        if (candidate < 0)
+            break;
+
+        uint64_t pf_address = (uint64_t)candidate << LOG2_BLOCK_SIZE;
+
+        if ((pf_address >> LOG2_PAGE_SIZE) != (addr >> LOG2_PAGE_SIZE))
+            break;
+
+        next_cl_addr = candidate;
+
+        int accepted;
+
+        if (MSHR.occupancy < (MSHR.SIZE >> 1))
+            accepted = prefetch_line(ip, addr, pf_address, FILL_L1, 0);
+        else
+            accepted = prefetch_line(ip, addr, pf_address, FILL_L2, 0);
+
+        if (accepted) {
+            issued++;
+
+            int p = next_cl_addr % PREFETCH_TABLE_SIZE;
+            prefetched[p].addr = next_cl_addr;
+            prefetched[p].state = 1;
+        }
+
+        for (int j=0; j<HISTORY_SIZE-1; j++)
+            history[j] = history[j+1];
+
+        history[HISTORY_SIZE-1] = next_stride;
+    }
+
+    for (int i=0; i<IP_TRACKER_COUNT; i++) {
+        if (trackers[i].lru < trackers[index].lru)
+            trackers[i].lru++;
+    }
+
+    trackers[index].lru = 0;
+
+    if (issued - last_issued >= 256) {
+        uint64_t window_issued = issued - last_issued;
+        uint64_t window_useful = useful - last_useful;
+
+        double accuracy = (double)window_useful / window_issued;
+
+        if (accuracy < 0.30)
+            degree = 1;
+        else if (accuracy < 0.60)
+            degree = 2;
+        else
+            degree = PREFETCH_DEGREE;
+
+        last_issued = issued;
+        last_useful = useful;
+    }
 }
 
 void CACHE::l1d_prefetcher_cache_fill(uint64_t v_addr, uint64_t addr, uint32_t set, uint32_t way, uint8_t prefetch, uint64_t v_evicted_addr, uint64_t evicted_addr, uint32_t metadata_in)
 {
+    uint64_t cl_addr = addr >> LOG2_BLOCK_SIZE;
+    int index = cl_addr % PREFETCH_TABLE_SIZE;
+
+    if (prefetch &&
+        prefetched[index].addr == cl_addr &&
+        prefetched[index].state == 1)
+        prefetched[index].state = 2;
+
+    uint64_t evicted_cl_addr = evicted_addr >> LOG2_BLOCK_SIZE;
+    index = evicted_cl_addr % PREFETCH_TABLE_SIZE;
+
+    if (prefetched[index].addr == evicted_cl_addr)
+        prefetched[index].state = 0;
+
 	return; //metadata_in;
 }
 
 void CACHE::l1d_prefetcher_final_stats()
 {
-
+    cout << "Issued: " << issued << endl;
+    cout << "Useful: " << useful << endl;
+    cout << "Final degree: " << degree << endl;
 }
