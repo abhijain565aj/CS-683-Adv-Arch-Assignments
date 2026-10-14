@@ -1,0 +1,135 @@
+
+#include "cache.h"
+
+#define maxRRPV 3
+
+#define THRESHOLD 0.25
+#define RESET_INTERVAL 4096
+
+uint32_t l2_rrpv[L2C_SET][L2C_WAY];
+
+uint64_t instr_accesses = 0;
+uint64_t instr_misses = 0;
+uint64_t total_accesses = 0;
+uint64_t total_misses = 0;
+
+bool use_irrip = false;
+
+void CACHE::l2c_initialize_replacement()
+{
+    cout << "Initialize Dynamic I-RRIP state for L2C" << endl;
+
+    instr_accesses = 0;
+    instr_misses = 0;
+    total_accesses = 0;
+    total_misses = 0;
+    use_irrip = false;
+
+    for (int i=0; i<L2C_SET; i++) {
+        for (int j=0; j<L2C_WAY; j++) {
+            l2_rrpv[i][j] = maxRRPV;
+        }
+    }
+}
+
+uint32_t CACHE::l2c_find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK *current_set, uint64_t ip, uint64_t full_addr, uint32_t type)
+{
+    bool irrip = false;
+
+    if (set % 32 == 1)
+        irrip = true;
+    else if (set % 32 != 0)
+        irrip = use_irrip;
+
+    for (int i=0; i<L2C_WAY; i++) {
+        if (!current_set[i].valid)
+            return i;
+    }
+
+    while (1) {
+        if (irrip) {
+            for (int i=0; i<L2C_WAY; i++) {
+                if (l2_rrpv[set][i] == maxRRPV &&
+                    !current_set[i].instruction)
+                    return i;
+            }
+        }
+
+        for (int i=0; i<L2C_WAY; i++) {
+            if (l2_rrpv[set][i] == maxRRPV)
+                return i;
+        }
+
+        for (int i=0; i<L2C_WAY; i++)
+            l2_rrpv[set][i]++;
+    }
+
+    assert(0);
+    return 0;
+}
+
+void CACHE::l2c_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit, uint8_t isInstruction)
+{
+    if ((type == WRITEBACK) && ip)
+        assert(0);
+
+    if (set % 32 == 0 || set % 32 == 1) {
+        total_accesses++;
+
+        if (isInstruction)
+            instr_accesses++;
+
+        if (!hit) {
+            total_misses++;
+
+            if (isInstruction)
+                instr_misses++;
+        }
+
+        double ratio = (double)(instr_accesses + instr_misses) /
+                       (total_accesses + total_misses);
+
+        use_irrip = (ratio >= THRESHOLD);
+
+        if (total_accesses >= RESET_INTERVAL) {
+            instr_accesses = 0;
+            instr_misses = 0;
+            total_accesses = 0;
+            total_misses = 0;
+        }
+    }
+
+    bool irrip = false;
+
+    if (set % 32 == 1)
+        irrip = true;
+    else if (set % 32 != 0)
+        irrip = use_irrip;
+
+    if (irrip) {
+        if (hit) {
+            if (isInstruction)
+                l2_rrpv[set][way] = 0;
+            else
+                l2_rrpv[set][way] = 1;
+        }
+        else {
+            if (isInstruction)
+                l2_rrpv[set][way] = 1;
+            else
+                l2_rrpv[set][way] = maxRRPV-1;
+        }
+    }
+    else {
+        if (hit)
+            l2_rrpv[set][way] = 0;
+        else
+            l2_rrpv[set][way] = maxRRPV-1;
+    }
+}
+
+void CACHE::l2c_replacement_final_stats()
+{
+    cout << "Dynamic I-RRIP final mode: "
+         << (use_irrip ? "I-RRIP" : "RRIP") << endl;
+}
