@@ -188,7 +188,7 @@ def run_streaming(
     return return_code, "".join(output)
 
 
-def build_experiment(experiment: Experiment) -> Path:
+def build_experiment(experiment: Experiment, log_dir: Path) -> Path:
     ensure_experiment_available(experiment)
     binary_name = f"runner-{experiment.name}"
     command = [
@@ -204,7 +204,12 @@ def build_experiment(experiment: Experiment) -> Path:
         ),
         flush=True,
     )
-    return_code, output = run_streaming(command, ROOT)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    return_code, output = run_streaming(
+        command,
+        ROOT,
+        log_path=log_dir / f"build-{experiment.name}.log",
+    )
     if return_code:
         raise RuntimeError(
             f"Build failed for {experiment.name}:\n{output}"
@@ -222,12 +227,13 @@ def run_one(
     simulation: int,
     threshold: Optional[float],
 ) -> Dict[str, object]:
-    binary = build_experiment(experiment)
+    task_log_dir = LOGS / experiment.task
+    binary = build_experiment(experiment, task_log_dir)
     label = f"{experiment.name}-{trace.stem}"
     if threshold is not None:
         label += f"-threshold-{threshold:g}"
-    log_path = LOGS / f"{label}.log"
-    LOGS.mkdir(parents=True, exist_ok=True)
+    log_path = task_log_dir / f"{label}.log"
+    task_log_dir.mkdir(parents=True, exist_ok=True)
     command = [
         str(binary),
         "-warmup_instructions",

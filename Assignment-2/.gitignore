@@ -5,3 +5,5 @@ bin/
 
 obj/
 # build files
+
+__pycache__/
