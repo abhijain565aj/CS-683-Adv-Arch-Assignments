@@ -1,7 +1,9 @@
 # Experiment orchestration. Run this file inside Assignment-2.
 
 PYTHON ?= python3
-RUNNER := $(PYTHON) experiment_runner.py
+DEBUG ?= 0
+RUNNER_DEBUG := $(if $(filter 1 on true yes,$(DEBUG)),--debug,)
+RUNNER := $(PYTHON) experiment_runner.py $(RUNNER_DEBUG)
 TRACE_ARGS ?= --traces all
 WARMUP ?= 25000000
 SIMULATION ?= 25000000
@@ -13,6 +15,7 @@ THRESHOLDS ?= 0.10,0.20,0.25,0.30,0.40
 
 help:
 	@echo "Use: make -f Makefile.experiments <target>"
+	@echo "  DEBUG=1       Show build and simulator output on the terminal"
 	@echo "  list          Show registered experiment configurations"
 	@echo "  build         Build the default baseline binary"
 	@echo "  run-task1b    Run baseline, IP-stride, and SPP"

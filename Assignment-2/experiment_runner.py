@@ -150,8 +150,9 @@ def run_streaming(
     cwd: Path,
     environment: Optional[Dict[str, str]] = None,
     log_path: Optional[Path] = None,
+    debug: bool = False,
 ) -> Tuple[int, str]:
-    """Run a command while displaying and optionally recording its output."""
+    """Run a command, recording output and displaying it only in debug mode."""
     command_text = f"$ {shlex.join(command)}"
     print(
         terminal_color(ANSI_BOLD + ANSI_CYAN, command_text),
@@ -175,20 +176,22 @@ def run_streaming(
             except OSError as exc:
                 if exc.errno != 26 or attempt == 2:
                     raise
-                print("Executable is still being replaced; retrying...", flush=True)
+                if debug:
+                    print("Executable is still being replaced; retrying...", flush=True)
                 time.sleep(1)
         assert process.stdout is not None
         for line in process.stdout:
             output.append(line)
-            sys.stdout.write(line)
-            sys.stdout.flush()
+            if debug:
+                sys.stdout.write(line)
+                sys.stdout.flush()
             log_handle.write(line)
             log_handle.flush()
         return_code = process.wait()
     return return_code, "".join(output)
 
 
-def build_experiment(experiment: Experiment, log_dir: Path) -> Path:
+def build_experiment(experiment: Experiment, log_dir: Path, debug: bool) -> Path:
     ensure_experiment_available(experiment)
     binary_name = f"runner-{experiment.name}"
     command = [
@@ -209,6 +212,7 @@ def build_experiment(experiment: Experiment, log_dir: Path) -> Path:
         command,
         ROOT,
         log_path=log_dir / f"build-{experiment.name}.log",
+        debug=debug,
     )
     if return_code:
         raise RuntimeError(
@@ -226,9 +230,10 @@ def run_one(
     warmup: int,
     simulation: int,
     threshold: Optional[float],
+    debug: bool,
 ) -> Dict[str, object]:
     task_log_dir = LOGS / experiment.task
-    binary = build_experiment(experiment, task_log_dir)
+    binary = build_experiment(experiment, task_log_dir, debug)
     label = f"{experiment.name}-{trace.stem}"
     if threshold is not None:
         label += f"-threshold-{threshold:g}"
@@ -257,7 +262,7 @@ def run_one(
         flush=True,
     )
     return_code, output = run_streaming(
-        command, ROOT, environment=environment, log_path=log_path
+        command, ROOT, environment=environment, log_path=log_path, debug=debug
     )
     if return_code:
         raise RuntimeError(f"Simulation failed; see {log_path}: {return_code}")
@@ -310,6 +315,7 @@ def run_task(
     warmup: int,
     simulation: int,
     thresholds: List[float],
+    debug: bool,
 ) -> List[Dict[str, object]]:
     rows: List[Dict[str, object]] = []
     names = TASK_EXPERIMENTS[task]
@@ -318,10 +324,10 @@ def run_task(
         if name == "dynamic_irrip" and thresholds:
             for threshold in thresholds:
                 for trace in traces:
-                    rows.append(run_one(experiment, trace, warmup, simulation, threshold))
+                    rows.append(run_one(experiment, trace, warmup, simulation, threshold, debug))
         else:
             for trace in traces:
-                rows.append(run_one(experiment, trace, warmup, simulation, None))
+                rows.append(run_one(experiment, trace, warmup, simulation, None, debug))
     add_derived_metrics(rows)
     return rows
 
@@ -410,6 +416,11 @@ def main() -> int:
     parser.add_argument("--warmup", type=positive_int, default=DEFAULT_WARMUP)
     parser.add_argument("--simulation", type=positive_int, default=DEFAULT_SIMULATION)
     parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="display build and simulator command output on the terminal",
+    )
+    parser.add_argument(
         "--thresholds",
         default="0.10,0.20,0.25,0.30,0.40",
         help="comma-separated dynamic I-RRIP thresholds",
@@ -424,7 +435,9 @@ def main() -> int:
     traces = traces_from_argument(args.traces)
     thresholds = [float(value) for value in args.thresholds.split(",") if value]
     if args.command in {"run", "all"}:
-        rows = run_task(args.task, traces, args.warmup, args.simulation, thresholds)
+        rows = run_task(
+            args.task, traces, args.warmup, args.simulation, thresholds, args.debug
+        )
         write_task_data(args.task, rows)
     if args.command in {"plot", "all"}:
         plot_task(args.task)
