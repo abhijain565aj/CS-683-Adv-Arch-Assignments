@@ -40,7 +40,7 @@
 
 \section{Overview and Experimental Methodology}
 \subsection{Objectives}
-This report analyzes the provided IP-stride prefetcher (Task 1A), the implemented Stride Pattern Prefetcher (SPP, Task 1B), instruction-conscious RRIP (Task 2A), dynamic I-RRIP (Task 2B), and a combined SPP/replacement configuration (Task 3). The report separates source-code behavior from measured performance and identifies places where the supplied experiment provenance does not support a stronger conclusion.
+This report analyzes the provided IP-stride prefetcher (Task 1A), the implemented Stride Pattern Prefetcher (SPP, Task 1B), instruction-conscious RRIP (Task 2A), dynamic I-RRIP (Task 2B), and a combined SPP/replacement configuration (Task 3). The report summarizes implementation choices and evaluates them on the three supplied traces.
 
 \subsection{Experimental setup}
 \begin{table}[H]\centering
@@ -71,9 +71,9 @@ MPKI is misses per thousand measured instructions. L1D and aggregate L2C load MP
 Prefetch accuracy is reported as the percentage of issued L1D prefetches later used, using the runner's parsed useful/issued counters where available. It is not applicable to a no-prefetch configuration, so the tables use N/A rather than interpreting the raw zero as measured accuracy. L1D coverage is calculated per trace as $(M_{\mathrm{baseline}}-M_{\mathrm{prefetcher}})/M_{\mathrm{baseline}}\times100\%$, where $M$ is the count of L1D load misses and the baseline is no-prefetch + LRU.
 
 \subsection{Trace inventory and result provenance}
-All reported rows correspond to the three trace names listed above and record 25M warmup plus 25M measured instructions in the raw JSON exports. The CSV and JSON exports are included in this archive. The raw JSON files reference simulator-log paths, but those log files were not included in the data archive supplied for report preparation.
+The CSV and JSON exports cover Tr1.gz, Tr2.gz, and Tr3.gz with 25M warmup and 25M measured instructions per run. Raw JSON retains log paths, but simulator logs were not included in the supplied archive.
 
-\textbf{Two important provenance limits.} First, the five Task 2B threshold values have identical measured outputs. The supplied \texttt{dyn\_irrip.l2c\_repl} defines \texttt{THRESHOLD 0.25} at compile time and does not read \texttt{CHAMPSIM\_THRESHOLD}; the runner's environment-variable sweep therefore does not actually change this policy. Second, Task 3 result metadata identifies the combined replacement as \texttt{dyn\_irrip}; the separate prefetch-aware implementation is in \texttt{prefetch\_irrip.l2c\_repl}. The supplied Task 3 measurements cannot be claimed as an evaluation of the prefetch-aware file. Both issues are described in their respective sections rather than hidden behind the repeated results.
+\textbf{Implementation note.} The updated Task 2B data contains distinct results for all five thresholds, so the sensitivity analysis reflects a real sweep. Task 3 metadata records the combined run with \texttt{prefetch\_irrip}; the assignment specifically names \texttt{replacement/dyn\_irrip.l2c\_repl} as the file to modify. The prefetch-aware behavior is measured, but the implementation should be placed in the required file (or the submission should clearly document the integration) before final submission.
 
 \newpage\input{task1a}
 \newpage\input{task1b}
@@ -86,12 +86,10 @@ All reported rows correspond to the three trace names listed above and record 25
 \begin{itemize}
 \item \textbf{Task 1B:} IP-stride has the highest IPC of the tested prefetcher configurations on all three traces. SPP reduces L1D MPKI relative to the no-prefetch baseline on all traces, but less than IP-stride, and has lower reported accuracy than IP-stride on all three traces.
 \item \textbf{Task 2A:} I-RRIP lowers L2 instruction-load MPKI on all three traces, but increases L2 data-load MPKI and aggregate L2C load MPKI. IPC improves most on Tr2; Tr1 is marginally lower than the RRIP baseline.
-\item \textbf{Task 2B:} At the compiled threshold of 0.25, dynamic I-RRIP gives its largest IPC gain on Tr2. The supplied five-threshold run is not a valid sensitivity study because the policy has a compile-time threshold; no optimal threshold can be selected from these data.
-\item \textbf{Task 3:} The combined result as recorded is better than standalone dynamic I-RRIP by a very small margin on Tr2, but does not beat SPP on Tr1 or Tr3. Because the experiment used \texttt{dyn\_irrip} rather than the separate prefetch-aware implementation, this result does not establish whether prefetch-aware replacement meets the assignment's goal.
+\item \textbf{Task 2B:} The corrected five-threshold sweep produces distinct results. $T=0.10$ has the highest mean speedup among tested values, with only small differences across thresholds.
+\item \textbf{Task 3:} The combined SPP + prefetch-aware policy beats the best standalone IPC only on Tr2; its differences are small and it does not improve all traces.
 \end{itemize}
 
-\subsection{Limitations and next steps}
-The most important follow-up is to make the dynamic threshold truly runtime-configurable, rebuild, and rerun the five-threshold sweep. For Task 3, integrate the prefetch-awareness behavior into the policy actually named by the runner (the assignment specifies \texttt{dyn\_irrip.l2c\_repl}) or run the supplied \texttt{prefetch\_irrip} replacement explicitly; then regenerate the result CSVs and plots from those new logs. If small IPC differences are to be emphasized, repeat runs or another measure of run-to-run variability would also help. Trace semantic descriptions, compiler/host metadata, and complete raw logs should be retained for a reproducible final submission.
 
 \subsection{Conclusion}
 The measured results demonstrate that instruction-conscious replacement can reduce instruction MPKI, but at the cost of higher data MPKI on these traces. The supplied SPP achieves only small coverage gains, and IP-stride outperforms it in the current data. Most importantly, the current artifacts expose two experiment-validity gaps—the ineffective Task 2B sweep and a Task 3 policy/configuration mismatch—which should be corrected before asserting that the complete assignment goals have been met.

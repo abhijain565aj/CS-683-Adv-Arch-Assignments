@@ -70,22 +70,22 @@ On a conventional 64-bit ABI, typical structure alignment gives an estimated arr
 
 \subsection{Measured results}
 
-All runs use 25 million warmup instructions and 25 million measured instructions. Speedup is relative to no prefetching with LRU on the same trace, and L1D coverage is the percentage reduction in L1D load misses relative to that baseline. The baseline and IP-stride entries below retain their previously recorded precision. SPP values are rounded to the precision visible in the supplied updated plots; IPC and speedup values marked $\approx$ should be replaced with exact values from the new Task 1B CSV/JSON before final submission.
+All runs use 25 million warmup instructions and 25 million measured instructions. Speedup is relative to no prefetching with LRU on the same trace, and L1D coverage is the percentage reduction in L1D load misses relative to that baseline. The table below uses the current Task 1B CSV values. Speedup is relative to no prefetching + LRU on the same trace.
 
 \begin{table}[H]\centering\scriptsize
-\caption{Task 1B results. SPP values are read from the updated plots; $\approx$ denotes values estimated from rounded plot labels. Accuracy and coverage are not applicable to the no-prefetch baseline.}
+\caption{Task 1B results from the current CSV. Accuracy and coverage are not applicable to the no-prefetch baseline.}
 \resizebox{\linewidth}{!}{\begin{tabular}{llrrrrr}
 \toprule Trace & Configuration & IPC & Speedup & L1D Load MPKI & Accuracy (\%) & Coverage (\%) \\
 \midrule
 Tr1.gz & No prefetch + LRU & 0.232345 & 1.000000 & 10.6780 & N/A & N/A \\
 Tr1.gz & IP-stride & 0.233452 & 1.004764 & 10.1190 & 52.7 & 5.2 \\
-Tr1.gz & SPP & $\approx0.2332$ & $\approx1.0038$ & 10.28 & 56.4 & 3.7 \\
+Tr1.gz & SPP & 0.233237 & 1.003839 & 10.2844 & 56.35 & 3.69 \\
 Tr2.gz & No prefetch + LRU & 0.251158 & 1.000000 & 13.5379 & N/A & N/A \\
 Tr2.gz & IP-stride & 0.251260 & 1.000406 & 13.4378 & 38.2 & 0.74 \\
-Tr2.gz & SPP & $\approx0.2512$ & $\approx1.0002$ & 13.46 & 51.8 & 0.61 \\
+Tr2.gz & SPP & 0.251210 & 1.000207 & 13.4560 & 51.77 & 0.61 \\
 Tr3.gz & No prefetch + LRU & 0.382065 & 1.000000 & 3.4034 & N/A & N/A \\
 Tr3.gz & IP-stride & 0.382862 & 1.002086 & 3.3182 & 16.0 & 2.5 \\
-Tr3.gz & SPP & $\approx0.3827$ & $\approx1.0017$ & 3.35 & 18.6 & 1.4 \\
+Tr3.gz & SPP & 0.382721 & 1.001717 & 3.3542 & 18.62 & 1.45 \\
 \bottomrule\end{tabular}}
 \end{table}
 
