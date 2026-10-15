@@ -1,30 +1,42 @@
 \section{Task 1B: Stride Pattern Prefetcher (SPP)}
 \label{sec:task1b}
+
 \subsection{Data structures and operation}
-The supplied \texttt{spp.l1d\_pref} has three direct-mapped structures: 24 IP trackers, a 1,024-entry signature table, and a 512-entry prefetch tracker. The IP key is again masked to eight bits. Each IP tracker stores a 64-bit IP field, last cache-line address, last stride, 32-bit LRU rank, four signed 64-bit stride-history values, a history count, a confidence integer, and a valid flag. When a new IP is seen, an invalid entry is preferred; otherwise an LRU entry is reused and its history is reset.
 
-For each nonzero stride, the implementation updates a short stride-history buffer. After four previous strides are available, it forms a 64-bit signature using the recurrence $s_{i+1}=31s_i+h_i$ over the four signed history values, then uses \texttt{signature \% 1024} as the index. A signature-table entry stores the full signature tag, the next observed stride, a confidence integer, and a valid flag. Matching observations increment confidence up to 7; a changed predicted stride replaces the stored stride and resets confidence to 1. A pattern-table prediction is accepted only when the full signature matches and its confidence is at least 2.
+The implemented \texttt{spp.l1d\_pref} uses three tracking structures: a 24-entry IP tracker with LRU replacement, a 1,024-entry directly indexed signature table, and a 512-entry prefetch tracking table. The IP key is masked to its lower eight bits. Each IP tracker stores an IP tag, the last cache-line address and stride, an LRU rank, four recent strides, a history count, a confidence counter, and a valid flag. On an IP miss, an invalid tracker is preferred; if all trackers are occupied, the least recently used entry is replaced and its history is reset.
 
-The predictor prioritizes a constant stride whenever its per-IP confidence is at least 1. That confidence is incremented when the current stride equals the previous stride and reset to 0 on a mismatch. If uniform confidence is 0 and four-history state is available, it attempts a signature-table prediction. Thus the source implements a compact conditional fallback, not a separate multi-state classifier with hysteresis. On each demand access it generates up to the current degree of next-stride requests; after each predicted request, the local history is shifted and the next prediction is selected again. A negative candidate or a cross-page candidate terminates the loop. Prefetches fill L1 when MSHR occupancy is below half capacity and L2 otherwise.
+For a tracked IP, the observed stride is the difference between the current cache-line address and the address of its preceding access. The corrected implementation updates \texttt{last\_cl\_addr} immediately after computing this difference, including when the stride is zero. This is necessary for consecutive strides such as $+2,+2,+2$ to be recognized as uniform, rather than measuring every stride from the tracker's first address. Zero strides do not train the signature predictor.
+
+For each nonzero stride, the prefetcher updates a four-stride history. Once four previous strides are available, it forms a 64-bit signature using $s_{i+1}=31s_i+h_i$ over the history values and indexes the signature table using \texttt{signature \% 1024}. Each signature entry stores a full signature tag, the next observed stride, a confidence counter, and a valid flag. A matching prediction increments confidence up to 7; a mismatch replaces the predicted stride and resets confidence to 1. A signature prediction is used only when its tag matches and confidence is at least 2.
+
+Uniform prediction takes priority. The per-IP confidence is increased when two successive nonzero strides match and reset when they differ. If this confidence is at least 1, the prefetcher predicts the current stride; otherwise, it attempts signature-based prediction using the recent history. This provides a simple transition from uniform to non-uniform prediction when the constant-stride pattern breaks. The prefetcher generates up to the selected degree of requests, updating a temporary history after each predicted stride. It stops if a candidate address is negative or falls outside the current OS page. Requests target L1D when MSHR occupancy is below half its capacity and otherwise target L2.
 
 \subsection{Accuracy-based degree control}
-Accepted prefetch requests increment the global \texttt{issued} counter. A prefetch-table entry, indexed by cache-line address modulo 512, records the address and a state: 1 for an accepted request not yet marked as filled, 2 after a matching prefetch fill, and 0 when cleared. A later demand access that hits a state-2 tracked line increments \texttt{useful}. On each interval where at least 256 additional requests have been accepted, the policy computes the usefulness ratio from the deltas since the last update and sets degree to 1 below 30\%, 2 from 30\% to below 60\%, and 3 at 60\% or above. Degree begins at 3. This is a batch update after issued requests, not a continuously updated sliding window.
+
+The implementation maintains \texttt{issued} and \texttt{useful} counters for adaptive degree control. An accepted prefetch is recorded in a 512-entry address-indexed table with state 1 (issued). A matching L1D prefetch fill changes the state to 2; a subsequent demand hit on that line increments \texttt{useful} and clears the entry. The internal accuracy estimate uses the changes in these counters since the previous update. It is therefore a tracked L1D-prefetch usefulness estimate, and is not necessarily identical to ChampSim's reported prefetch accuracy, especially for requests targeting L2.
+
+After at least 256 additional accepted prefetch requests, the degree is adjusted using the measured usefulness ratio. The prefetcher starts with degree 3 and follows the policy below.
 
 \begin{table}[H]\centering\small
-\caption{Degree selection encoded in the supplied SPP implementation.}
+\caption{Accuracy-based degree selection in SPP.}
 \begin{tabular}{p{0.45\linewidth}p{0.10\linewidth}p{0.37\linewidth}}
-\toprule Measured accuracy since previous update & Degree & Effect \\
+\toprule Accuracy since previous update & Degree & Rationale \\
 \midrule
-Below 30\% & 1 & Conservative; limits traffic after low observed usefulness \\
-30\% to below 60\% & 2 & Intermediate aggressiveness \\
-60\% or above & 3 & Maximum degree in this implementation \\
+Below 30\% & 1 & Reduce traffic when many predictions are not useful \\
+30\% to below 60\% & 2 & Balance lookahead and possible cache pollution \\
+60\% or above & 3 & Use more lookahead when predictions are frequently useful \\
 \bottomrule
-\end{tabular}\end{table}
+\end{tabular}
+\end{table}
+
+The 30\% and 60\% thresholds are simple heuristic cutoffs, not values selected through an independent parameter sweep. Degrees 1, 2, and 3 provide three levels of aggressiveness without additional predictor structures. An update interval of 256 accepted requests avoids changing the degree after every individual prefetch. Larger degrees can improve coverage for predictable access sequences but may waste bandwidth and evict useful lines when predictions are inaccurate.
 
 \subsection{Logical storage accounting}
+
 The accounting below counts declared field information bits, treating a boolean as one logical bit and a C++ \texttt{int} as 32 bits. The IP field is counted as 64 bits because the source stores it in a \texttt{uint64\_t}, even though the value is masked to eight bits before use.
+
 \begin{table}[H]\centering\scriptsize
-\caption{Bit-level logical storage for all SPP state. C++ object padding is reported separately below.}
+\caption{Bit-level logical storage for the SPP state. C++ object padding is considered separately below.}
 \resizebox{\linewidth}{!}{\begin{tabular}{llrrr}
 \toprule Structure & Field & Bits per entry & Entries & Total bits \\
 \midrule
@@ -51,34 +63,41 @@ Global state & Degree integer & 32 & 1 & 32 \\
 \multicolumn{4}{r}{\textbf{Total logical field bits}} & \textbf{227,384} \\
 \multicolumn{4}{r}{\textbf{Logical bytes (bits/8)}} & \textbf{28,423} \\
 \multicolumn{4}{r}{\textbf{Logical KiB (bytes/1024)}} & \textbf{27.76} \\
-\bottomrule\end{tabular}}\end{table}
+\bottomrule\end{tabular}}
+\end{table}
 
-On a conventional 64-bit ABI, typical structure alignment would make the arrays approximately $24\times80 + 1024\times24 + 512\times16=34,688$ bytes. Adding the four 64-bit counters and the 32-bit degree gives about 34,724 bytes (33.91 KiB), excluding executable/runtime overhead. The logical-field total and ABI-size estimate answer different questions: the former counts information field widths, while the latter includes expected padding. Exact physical bytes should be confirmed with \texttt{sizeof} on the compiler used for the final submission.
+On a conventional 64-bit ABI, typical structure alignment gives an estimated array size of $24\times80 + 1024\times24 + 512\times16 = 34,688$ bytes. Adding four 64-bit counters and a 32-bit degree gives approximately 34,724 bytes (33.91 KiB), excluding any additional executable/runtime overhead. The logical bit count measures the declared field widths with one-bit booleans; the ABI estimate includes expected padding. The exact in-memory size depends on the compiler and can be checked using \texttt{sizeof}.
 
 \subsection{Measured results}
+
+All runs use 25 million warmup instructions and 25 million measured instructions. Speedup is relative to no prefetching with LRU on the same trace, and L1D coverage is the percentage reduction in L1D load misses relative to that baseline. The baseline and IP-stride entries below retain their previously recorded precision. SPP values are rounded to the precision visible in the supplied updated plots; IPC and speedup values marked $\approx$ should be replaced with exact values from the new Task 1B CSV/JSON before final submission.
+
 \begin{table}[H]\centering\scriptsize
-\caption{Task 1B measurements. Coverage and accuracy are not applicable to the no-prefetch baseline.}
+\caption{Task 1B results. SPP values are read from the updated plots; $\approx$ denotes values estimated from rounded plot labels. Accuracy and coverage are not applicable to the no-prefetch baseline.}
 \resizebox{\linewidth}{!}{\begin{tabular}{llrrrrr}
 \toprule Trace & Configuration & IPC & Speedup & L1D Load MPKI & Accuracy (\%) & Coverage (\%) \\
 \midrule
 Tr1.gz & No prefetch + LRU & 0.232345 & 1.000000 & 10.6780 & N/A & N/A \\
-Tr1.gz & IP-stride & 0.233452 & 1.004764 & 10.1190 & 52.71 & 5.24 \\
-Tr1.gz & SPP & 0.232577 & 1.000999 & 10.5465 & 41.33 & 1.23 \\
+Tr1.gz & IP-stride & 0.233452 & 1.004764 & 10.1190 & 52.7 & 5.2 \\
+Tr1.gz & SPP & $\approx0.2332$ & $\approx1.0038$ & 10.28 & 56.4 & 3.7 \\
 Tr2.gz & No prefetch + LRU & 0.251158 & 1.000000 & 13.5379 & N/A & N/A \\
-Tr2.gz & IP-stride & 0.251260 & 1.000406 & 13.4378 & 38.18 & 0.74 \\
-Tr2.gz & SPP & 0.251094 & 0.999745 & 13.5014 & 33.54 & 0.27 \\
+Tr2.gz & IP-stride & 0.251260 & 1.000406 & 13.4378 & 38.2 & 0.74 \\
+Tr2.gz & SPP & $\approx0.2512$ & $\approx1.0002$ & 13.46 & 51.8 & 0.61 \\
 Tr3.gz & No prefetch + LRU & 0.382065 & 1.000000 & 3.4034 & N/A & N/A \\
-Tr3.gz & IP-stride & 0.382862 & 1.002086 & 3.3182 & 15.99 & 2.51 \\
-Tr3.gz & SPP & 0.382139 & 1.000194 & 3.3938 & 8.51 & 0.28 \\
+Tr3.gz & IP-stride & 0.382862 & 1.002086 & 3.3182 & 16.0 & 2.5 \\
+Tr3.gz & SPP & $\approx0.3827$ & $\approx1.0017$ & 3.35 & 18.6 & 1.4 \\
 \bottomrule\end{tabular}}
 \end{table}
 
 \plotpair{plots/task1b/ipc.png}{IPC}{plots/task1b/speedup.png}{Speedup}{Task 1B IPC and speedup across traces}{fig:t1b-ipc-speedup}
-\plotpair{plots/task1b/l1d_load_mpki.png}{L1D load MPKI}{plots/task1b/prefetch_accuracy_pct.png}{Prefetch accuracy}{Task 1B miss intensity and prefetch accuracy}{fig:t1b-mpki-accuracy}
+\plotpair{plots/task1b/l1d_load_mpki.png}{L1D load MPKI}{plots/task1b/prefetch_accuracy_pct.png}{Prefetch accuracy}{Task 1B L1D load misses and prefetch accuracy}{fig:t1b-mpki-accuracy}
 \plotpair{plots/task1b/l1d_coverage_pct.png}{L1D coverage}{plots/task1b/ipc_change_vs_baseline_pct.png}{IPC change vs. baseline}{Task 1B coverage and relative IPC change}{fig:t1b-coverage-change}
-\plotone{plots/task1b/l1d_mpki_reduction_vs_baseline_pct.png}{L1D load-MPKI reduction relative to no-prefetch + LRU. Positive values mean fewer L1D load misses.}{fig:t1b-mpki-reduction}
+\plotone{plots/task1b/l1d_mpki_reduction_vs_baseline_pct.png}{L1D load-MPKI reduction relative to no-prefetch + LRU. Positive values indicate fewer L1D load misses.}{fig:t1b-mpki-reduction}
 
 \subsection{Interpretation}
-On Tr1, IP-stride improves IPC by 0.476\% over no-prefetch + LRU, while SPP improves it by 0.100\%. On Tr2, IP-stride improves by 0.041\%, while SPP is 0.025\% below baseline. On Tr3, IP-stride improves by 0.209\% and SPP by 0.019\%. Thus IP-stride has the highest IPC of the compared configurations on all three traces in this data set.
 
-IP-stride also has higher measured accuracy and coverage than SPP on every trace. The L1D load-MPKI reductions are 5.24\%, 0.74\%, and 2.51\% for IP-stride on Tr1/Tr2/Tr3, compared with 1.23\%, 0.27\%, and 0.28\% for SPP. These observations do not prove that multi-stride prediction is generally worse; they show that the current compact signature/fallback implementation does not outperform the provided IP-stride baseline on these particular traces. The signature table's direct mapping, small IP tracker pool, masked IP key, confidence fallback, and modulo-indexed prefetch tracker are plausible limits, but the measurements alone do not isolate which mechanism explains the gap.
+The corrected SPP improves IPC over the no-prefetch baseline on all three traces, by approximately 0.38\%, 0.02\%, and 0.17\% on Tr1, Tr2, and Tr3. IP-stride has slightly higher IPC improvements of approximately 0.48\%, 0.04\%, and 0.21\%, respectively. The differences are small, but IP-stride remains the best of the three evaluated configurations in IPC on each trace.
+
+SPP achieves higher reported prefetch accuracy than IP-stride on every trace: 56.4\% versus 52.7\% on Tr1, 51.8\% versus 38.2\% on Tr2, and 18.6\% versus 16.0\% on Tr3. However, IP-stride maintains higher L1D coverage (5.2\%, 0.74\%, and 2.5\%) than SPP (3.7\%, 0.61\%, and 1.4\%). The corresponding L1D load MPKI values also remain slightly lower for IP-stride. Thus, better accuracy for SPP does not translate into greater miss coverage or higher IPC in these experiments.
+
+These results suggest that the corrected SPP makes more selective prefetches but does not hide as many demand misses as IP-stride on the three tested traces. Possible contributing factors include limited signature-table capacity, masked IP aliasing, prefetch-degree throttling, and fallback behavior. The measurements do not isolate the effects of these design choices, and they are not enough to conclude that non-uniform stride prediction is generally less effective. The results are specific to the implemented policy and the supplied workloads.
