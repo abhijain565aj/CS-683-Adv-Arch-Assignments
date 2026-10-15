@@ -25,8 +25,6 @@ DEFAULT_WARMUP = 25_000_000
 DEFAULT_SIMULATION = 25_000_000
 DEFAULT_THRESHOLDS = "0.10,0.20,0.25,0.30,0.40"
 DEFAULT_FIXED_THRESHOLD = 0.25
-TITLE_COLOR = "\033[1;36m"
-COLOR_RESET = "\033[0m"
 
 
 @dataclass(frozen=True)
@@ -35,10 +33,6 @@ class Experiment:
     prefetcher: str
     replacement: str
     description: str
-
-
-def print_title(message: str) -> None:
-    print(f"{TITLE_COLOR}{message}{COLOR_RESET}", flush=True)
 
 
 # Names here must match the filenames in prefetcher/ and replacement/.
@@ -52,7 +46,7 @@ EXPERIMENTS = {
         "dynamic_irrip", "no", "dyn_irrip", "No prefetching + Dynamic I-RRIP"
     ),
     "combined": Experiment(
-        "combined", "spp", "prefetch_irrip", "SPP + prefetch-aware Dynamic I-RRIP"
+        "combined", "spp", "dyn_irrip", "SPP + prefetch-aware Dynamic I-RRIP"
     ),
 }
 
@@ -280,14 +274,18 @@ def execute(command: list[str], log_path: Path, env: Optional[dict] = None,
                 print(line, end="", flush=True)
         return_code = process.wait()
     if return_code:
-        raise RuntimeError(f"Command failed (exit {return_code}). Log: {log_path}")
+        tail = "".join(output_lines[-45:]).rstrip()
+        raise RuntimeError(
+            f"Command failed (exit {return_code}). Log: {log_path}"
+            + (f"\n\nLast 45 lines of command output:\n{tail}" if tail else "")
+        )
     return "".join(output_lines)
 
 
 def build_experiment(experiment: Experiment, task: str, debug: bool) -> Path:
     verify_sources(experiment)
     binary_name = f"runner-{experiment.name}"
-    print_title(f"\nBuilding {experiment.name}: {experiment.description}")
+    print(f"\nBuilding {experiment.name}: {experiment.description}", flush=True)
     execute(
         ["bash", str(ROOT / "build_champsim.sh"),
          experiment.prefetcher, experiment.replacement, binary_name],
@@ -299,14 +297,45 @@ def build_experiment(experiment: Experiment, task: str, debug: bool) -> Path:
     return binaries[-1].resolve()
 
 
+def run_log_path(experiment: Experiment, task: str, trace: Path,
+                 threshold: Optional[float]) -> Path:
+    trace_id = re.sub(r"\.champsimtrace(?:\.xz|\.gz)?$", "", trace.name)
+    label = f"{experiment.name}-{trace_id}"
+    if experiment.name == "combined":
+        # Keep runs with different combined policies from sharing saved logs.
+        label = f"combined-{experiment.replacement}-{trace_id}"
+    if threshold is not None:
+        label += f"-threshold-{threshold:g}"
+    return LOGS_DIR / task / f"{label}.log"
+
+
+def reuse_completed_run(experiment: Experiment, task: str, trace: Path,
+                        warmup: int, simulation: int,
+                        threshold: Optional[float]) -> Optional[dict]:
+    """Reuse a successful-looking log only when --resume is explicitly requested."""
+    log_path = run_log_path(experiment, task, trace, threshold)
+    if not log_path.is_file():
+        return None
+    metrics = parse_output(log_path.read_text(errors="replace"), simulation)
+    if "ipc" not in metrics:
+        return None
+    print(f"Reusing {log_path.relative_to(ROOT)}", flush=True)
+    return {
+        "trace": trace.name,
+        "configuration": experiment.name,
+        "description": experiment.description,
+        "threshold": threshold,
+        "warmup_instructions": warmup,
+        "simulation_instructions": simulation,
+        "log": str(log_path.relative_to(ROOT)),
+        **metrics,
+    }
+
+
 def run_one(experiment: Experiment, binary: Path, task: str, trace: Path,
             warmup: int, simulation: int, threshold: Optional[float],
             debug: bool) -> dict:
-    trace_id = re.sub(r"\.champsimtrace(?:\.xz|\.gz)?$", "", trace.name)
-    label = f"{experiment.name}-{trace_id}"
-    if threshold is not None:
-        label += f"-threshold-{threshold:g}"
-    log_path = LOGS_DIR / task / f"{label}.log"
+    log_path = run_log_path(experiment, task, trace, threshold)
 
     env = os.environ.copy()
     # Explicitly remove an inherited threshold for policies that should use their defaults.
@@ -314,8 +343,8 @@ def run_one(experiment: Experiment, binary: Path, task: str, trace: Path,
     if threshold is not None:
         env["CHAMPSIM_THRESHOLD"] = str(threshold)
 
-    print_title(f"\nRunning {task}: {experiment.name} | {trace.name}"
-                f" | threshold={threshold if threshold is not None else '-'}")
+    print(f"\nRunning {task}: {experiment.name} | {trace.name}"
+          f" | threshold={threshold if threshold is not None else '-'}", flush=True)
     output = execute(
         [str(binary), "-warmup_instructions", str(warmup),
          "-simulation_instructions", str(simulation), "-traces", str(trace)],
@@ -413,11 +442,11 @@ def write_task_data(task: str, rows: list[dict]) -> None:
 
 
 def run_task(task: str, traces: list[Path], warmup: int, simulation: int,
-             thresholds: list[float], fixed_threshold: float, debug: bool) -> list[dict]:
+             thresholds: list[float], fixed_threshold: float, debug: bool,
+             resume: bool = False) -> list[dict]:
     rows = []
     for name in TASK_EXPERIMENTS[task]:
         experiment = EXPERIMENTS[name]
-        binary = build_experiment(experiment, task, debug)  # Compile once per configuration.
         if task == "task2b" and name == "dynamic_irrip":
             selected_thresholds = thresholds
         elif task == "task3" and name in ("dynamic_irrip", "combined"):
@@ -425,8 +454,18 @@ def run_task(task: str, traces: list[Path], warmup: int, simulation: int,
         else:
             selected_thresholds = [None]
 
+        binary = None  # Build only if at least one run isn't reusable.
         for threshold in selected_thresholds:
             for trace in traces:
+                if resume:
+                    previous = reuse_completed_run(
+                        experiment, task, trace, warmup, simulation, threshold
+                    )
+                    if previous is not None:
+                        rows.append(previous)
+                        continue
+                if binary is None:
+                    binary = build_experiment(experiment, task, debug)
                 rows.append(run_one(experiment, binary, task, trace, warmup,
                                     simulation, threshold, debug))
 
@@ -568,8 +607,22 @@ def main() -> int:
     parser.add_argument("--fixed-threshold", type=threshold_value,
                         default=DEFAULT_FIXED_THRESHOLD,
                         help="Task 3 threshold, shared by dynamic and combined configurations")
+    parser.add_argument("--combined-replacement", default="dyn_irrip",
+                        help="Task 3 combined L2 policy (default: dyn_irrip as specified in PA2; "
+                             "use prefetch_irrip only if that separate policy builds)")
+    parser.add_argument("--resume", action="store_true",
+                        help="Reuse existing simulation logs with a parsed IPC; "
+                             "use only when the underlying C++ implementations have not changed")
     parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
+
+    if args.task == "task3":
+        name = args.combined_replacement
+        if not re.fullmatch(r"[A-Za-z0-9_]+", name):
+            parser.error("--combined-replacement must be a replacement policy filename stem")
+        EXPERIMENTS["combined"] = Experiment(
+            "combined", "spp", name, "SPP + prefetch-aware Dynamic I-RRIP"
+        )
 
     if args.command == "list":
         for task, names in TASK_EXPERIMENTS.items():
@@ -587,7 +640,8 @@ def main() -> int:
         traces = find_traces(args.traces, args.traces_dir)
         thresholds = parse_thresholds(args.thresholds) if args.task == "task2b" else []
         rows = run_task(args.task, traces, args.warmup, args.simulation,
-                        thresholds, args.fixed_threshold, args.debug)
+                        thresholds, args.fixed_threshold, args.debug,
+                        resume=args.resume)
         write_task_data(args.task, rows)
     if args.command in ("plot", "all"):
         plot_task(args.task)
