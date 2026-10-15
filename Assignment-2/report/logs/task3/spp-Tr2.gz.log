@@ -21,7 +21,7 @@ L1D has LRU replacement policy
 L2C has LRU replacement policy
 LLC has LRU replacement policy
 Heartbeat CPU 0 instructions: 10000000 cycles: 2974236 heartbeat IPC: 3.36221 cumulative IPC: 3.36221 (Simulation time: 0 hr 0 min 14 sec) 
-Heartbeat CPU 0 instructions: 20000001 cycles: 5829241 heartbeat IPC: 3.50262 cumulative IPC: 3.43098 (Simulation time: 0 hr 0 min 29 sec) 
+Heartbeat CPU 0 instructions: 20000001 cycles: 5829241 heartbeat IPC: 3.50262 cumulative IPC: 3.43098 (Simulation time: 0 hr 0 min 30 sec) 
 
 Warmup complete CPU 0 instructions: 25000002 cycles: 7248719 (Simulation time: 0 hr 0 min 37 sec) 
 

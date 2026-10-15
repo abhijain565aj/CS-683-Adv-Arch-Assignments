@@ -17,15 +17,15 @@ L1I has LRU replacement policy
 L1D has LRU replacement policy
 Initialize Dynamic I-RRIP state for L2C
 LLC has LRU replacement policy
-Heartbeat CPU 0 instructions: 10000002 cycles: 2954312 heartbeat IPC: 3.38488 cumulative IPC: 3.38488 (Simulation time: 0 hr 0 min 15 sec) 
-Heartbeat CPU 0 instructions: 20000001 cycles: 5916548 heartbeat IPC: 3.37583 cumulative IPC: 3.38035 (Simulation time: 0 hr 0 min 30 sec) 
+Heartbeat CPU 0 instructions: 10000002 cycles: 2954312 heartbeat IPC: 3.38488 cumulative IPC: 3.38488 (Simulation time: 0 hr 0 min 14 sec) 
+Heartbeat CPU 0 instructions: 20000001 cycles: 5916548 heartbeat IPC: 3.37583 cumulative IPC: 3.38035 (Simulation time: 0 hr 0 min 29 sec) 
 
-Warmup complete CPU 0 instructions: 25000004 cycles: 7351319 (Simulation time: 0 hr 0 min 37 sec) 
+Warmup complete CPU 0 instructions: 25000004 cycles: 7351319 (Simulation time: 0 hr 0 min 36 sec) 
 
-Heartbeat CPU 0 instructions: 30000003 cycles: 31313357 heartbeat IPC: 0.39375 cumulative IPC: 0.208663 (Simulation time: 0 hr 0 min 51 sec) 
-Heartbeat CPU 0 instructions: 40000000 cycles: 71707559 heartbeat IPC: 0.24756 cumulative IPC: 0.233078 (Simulation time: 0 hr 1 min 17 sec) 
-Heartbeat CPU 0 instructions: 50000000 cycles: 114979755 heartbeat IPC: 0.231095 cumulative IPC: 0.232281 (Simulation time: 0 hr 1 min 45 sec) 
-Finished CPU 0 instructions: 25000000 cycles: 107628440 cumulative IPC: 0.232281 (Simulation time: 0 hr 1 min 45 sec) 
+Heartbeat CPU 0 instructions: 30000003 cycles: 31313357 heartbeat IPC: 0.39375 cumulative IPC: 0.208663 (Simulation time: 0 hr 0 min 50 sec) 
+Heartbeat CPU 0 instructions: 40000000 cycles: 71707559 heartbeat IPC: 0.24756 cumulative IPC: 0.233078 (Simulation time: 0 hr 1 min 16 sec) 
+Heartbeat CPU 0 instructions: 50000000 cycles: 114979755 heartbeat IPC: 0.231095 cumulative IPC: 0.232281 (Simulation time: 0 hr 1 min 43 sec) 
+Finished CPU 0 instructions: 25000000 cycles: 107628440 cumulative IPC: 0.232281 (Simulation time: 0 hr 1 min 43 sec) 
 
 ChampSim completed all CPUs
 

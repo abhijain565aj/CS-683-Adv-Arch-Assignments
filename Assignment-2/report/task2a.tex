@@ -1,57 +1,33 @@
-% ============================================================
-% TASK 2A: Instruction-Conscious L2 Replacement Policy (I-RRIP)
-% ============================================================
-% TODO Task 2A: implement, measure, plot, and explain I-RRIP.
 \section{Task 2A: Instruction-Conscious L2 Replacement Policy (I-RRIP)}
+\label{sec:task2a}
+\subsection{RRIP baseline and policy changes}
+The provided \texttt{rrip.l2c\_repl} uses \texttt{maxRRPV=3}, corresponding to four RRPV states (0--3). It initializes state to 3, inserts a miss at RRPV 2, promotes a hit to 0, chooses a line at maximum RRPV as victim, and increments RRPVs until a candidate reaches the maximum if necessary.
 
-\subsection{Baseline RRIP and Motivation}
-\TODO{Briefly describe the provided RRIP policy and why prioritizing instruction lines at L2 may matter for the evaluated workloads. Reference the repository's actual RRIP implementation.}
+I-RRIP keeps the same two-bit-like 0--3 state convention and first chooses an invalid way if one exists. For a full set it preferentially evicts a non-instruction line whose RRPV is 3; if none exists, it falls back to any way with RRPV 3. If no way is yet at 3, it increments all RRPVs and repeats. The preference therefore affects victim choice only among the maximum-RRPV candidates; it does not evict an instruction line with a lower RRPV while a less-protected data line is available.
 
-\subsection{Implementation Changes}
-The required changes cover replacement-state update/insertion, promotion, and eviction, with the policy informed by whether a packet represents an instruction line (the assignment notes \texttt{packet.instruction}).
-\begin{itemize}
-    \item \textbf{API / metadata changes:} \TODO{Describe the signature change to update replacement state and all affected call sites.}
-    \item \textbf{Insertion:} \TODO{Specify initial RRPV/state for instruction and data lines and explain the rationale.}
-    \item \textbf{Promotion:} \TODO{Specify hit behavior for instruction and data lines. Explain whether the classes promote differently.}
-    \item \textbf{Eviction:} \TODO{Explain victim selection and how ties, aging, and saturation are handled.}
-    \item \textbf{Compatibility:} \TODO{Describe API, compilation, and corner-case checks performed.}
-\end{itemize}
-\begin{figure}[H]\centering
-\evidencebox[4.2cm]{\TODO{Insert a compact policy diagram or pseudocode comparing RRIP and I-RRIP for insertion, hit promotion, aging, and victim selection.}}
-\caption{Instruction-conscious modifications to the RRIP lifecycle.}\label{fig:irrip_policy}
-\end{figure}
+The update callback in the supplied policy accepts an \texttt{isInstruction} flag. On a hit, an instruction line is promoted to RRPV 0 and a data line to 1. On a miss, instruction lines are inserted at 1 while data lines are inserted at 2. Relative to baseline RRIP, instructions receive stronger insertion and hit protection, while data lines retain a less protected state. The policy's comments and source do not include the cache-header/call-site diff, so the precise number of integration call sites changed cannot be independently enumerated from the supplied source archive.
 
-\subsection{Experimental Results}
-Report IPC, speedup, and load MPKI for L2C, L2 instruction, and L2 data. Include baseline RRIP and I-RRIP results for every trace.
-\begin{table}[H]\centering
-\caption{Task 2A: I-RRIP result table. MPKI columns must specify the exact ChampSim statistic used.}
-\small
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{llrrrrr}
-\toprule Trace & Policy & IPC & Speedup & L2C Load MPKI & L2I Load MPKI & L2D Load MPKI \\
+\subsection{Results}
+\begin{table}[H]\centering\scriptsize
+\caption{Task 2A results. Speedup is relative to RRIP for the same trace.}
+\resizebox{\linewidth}{!}{\begin{tabular}{llrrrrr}
+\toprule Trace & Policy & IPC & Speedup & L2C Load MPKI & L2 Instruction MPKI & L2 Data MPKI \\
 \midrule
-\TODO{trace} & RRIP baseline & \TODO{value} & 1.00$\times$ & \TODO{value} & \TODO{value} & \TODO{value} \\
-\TODO{trace} & I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
-\TODO{add rows} & & & & & & \\
-\bottomrule
-\end{tabular}%
-}\end{table}
+Tr1.gz & RRIP baseline & 0.232231 & 1.000000 & 2.2021 & 10.5618 & 7.0769 \\
+Tr1.gz & I-RRIP & 0.232164 & 0.999711 & 2.4089 & 9.8916 & 7.7172 \\
+Tr2.gz & RRIP baseline & 0.251806 & 1.000000 & 2.1711 & 17.7813 & 7.9645 \\
+Tr2.gz & I-RRIP & 0.256625 & 1.019138 & 2.3754 & 13.0364 & 9.1737 \\
+Tr3.gz & RRIP baseline & 0.381739 & 1.000000 & 0.7090 & 1.1970 & 2.8424 \\
+Tr3.gz & I-RRIP & 0.381981 & 1.000634 & 0.7264 & 1.0221 & 2.8761 \\
+\bottomrule\end{tabular}}
+\end{table}
 
-\begin{figure}[H]\centering
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{IPC per trace: RRIP baseline vs. I-RRIP}\caption{IPC}\end{subfigure}\hfill
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{Speedup per trace against RRIP baseline}\caption{Speedup}\end{subfigure}
-\vspace{0.6em}
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2C load MPKI per trace and policy}\caption{L2C load MPKI}\end{subfigure}\hfill
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2 instruction-load MPKI per trace and policy}\caption{L2 instruction MPKI}\end{subfigure}
-\vspace{0.6em}
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2 data-load MPKI per trace and policy}\caption{L2 data MPKI}\end{subfigure}
-\caption{Required Task 2A performance metrics.}\label{fig:irrip_results}
-\end{figure}
+\plotpair{plots/task2a/ipc.png}{IPC}{plots/task2a/speedup.png}{Speedup}{Task 2A IPC and speedup, using RRIP as the baseline}{fig:t2a-ipc-speedup}
+\plotpair{plots/task2a/l2c_load_mpki.png}{L2C load MPKI}{plots/task2a/l2i_load_mpki.png}{L2 instruction-load MPKI}{Task 2A aggregate and instruction-load MPKI}{fig:t2a-l2c-l2i}
+\plotpair{plots/task2a/l2d_load_mpki.png}{L2 data-load MPKI}{plots/task2a/ipc_change_vs_rrip_pct.png}{IPC change relative to RRIP (\%)}{Task 2A data MPKI and relative IPC change}{fig:t2a-l2d-change}
+\plotone{plots/task2a/l2i_mpki_reduction_vs_rrip_pct.png}{L2 instruction-load MPKI reduction relative to RRIP; positive values mean fewer instruction misses.}{fig:t2a-l2i-reduction}
 
-\subsection{Analysis and Rationale}
-\begin{enumerate}
-    \item \textbf{Insertion logic:} \TODO{Explain why the implemented insertion priorities preserve or demote instruction/data lines.}
-    \item \textbf{Promotion logic:} \TODO{Discuss whether instruction hits receive stronger protection and the effect on data lines.}
-    \item \textbf{Eviction logic:} \TODO{Explain victim selection and how instruction and data RRPVs compete.}
-    \item \textbf{Results:} \TODO{Explain changes in IPC and all three MPKI metrics, including positive and negative cases. Avoid claiming causality beyond measured evidence.}
-\end{enumerate}
+\subsection{Discussion}
+I-RRIP lowers instruction-load MPKI on every trace: from 10.5618 to 9.8916 on Tr1 (6.34\% reduction), 17.7813 to 13.0364 on Tr2 (26.68\% reduction), and 1.1970 to 1.0221 on Tr3 (14.61\% reduction). Its IPC effect varies: Tr1 falls by 0.029\%, Tr2 rises by 1.914\%, and Tr3 rises by 0.063\%. The largest benefit in these measurements is on Tr2, where the instruction-MPKI reduction coincides with a substantial IPC increase.
+
+The trade-off is visible in data behavior. L2 data MPKI rises from 7.0769 to 7.7172 on Tr1, 7.9645 to 9.1737 on Tr2, and 2.8424 to 2.8761 on Tr3. The aggregate L2C load-MPKI field also rises on all traces. The implementation's priority rule is consistent with the stated objective of protecting instruction lines, but the measurements show that the policy can displace useful data and does not guarantee an overall benefit. The insertion and promotion choices are simple and consistent with that objective; a more selective policy could make instruction protection conditional on demonstrated reuse or phase behavior.

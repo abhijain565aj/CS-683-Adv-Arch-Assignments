@@ -1,85 +1,53 @@
-% ============================================================
-% TASK 2B: Dynamic I-RRIP
-% ============================================================
-% TODO Task 2B: implement, sweep, plot, and explain dynamic I-RRIP.
-\section{Task 2B: Dynamic I-RRIP}
+\section{Task 2B: Dynamic I-RRIP with Set Dueling}
+\label{sec:task2b}
+\subsection{Set selection and decision statistic}
+The supplied \texttt{dyn\_irrip.l2c\_repl} sets \texttt{maxRRPV=3}, uses \texttt{RESET\_INTERVAL=4096}, and defines the threshold as the compile-time constant \texttt{THRESHOLD 0.25}. For set index $s$, sets with $s\bmod32=0$ are RRIP leader sets, sets with $s\bmod32=1$ are I-RRIP leader sets, and all other sets use the global follower decision. The two leader classes together account for 2 of every 32 sets (6.25\% when the number of sets is divisible by 32), with each leader class representing 3.125\% of sets.
 
-\subsection{Design and Set-Dueling Mechanism}
-Dynamic I-RRIP switches between instruction-conscious replacement and regular RRIP based on observed workload behavior. The assignment suggests set dueling with selected leader sets that always use RRIP, tracking instruction and non-instruction accesses and misses, and comparing a decision statistic with a threshold.
-
-\TODO{Describe the set-indexing rule for leader sets, number/fraction of leader sets, how leader sets stay on RRIP, which sets use the follower decision, and how often the decision is updated.}
-
-\subsection{Decision Statistic}
-If the implementation follows the assignment's example, document the exact statistic and how its inputs are collected. The example in the assignment is:
+The policy updates shared counters on accesses to either leader class and computes
 \[
-R = \frac{A_I + M_I}{A_{\mathrm{total}} + M_{\mathrm{total}}},
+R=\frac{A_I+M_I}{A_{\mathrm{total}}+M_{\mathrm{total}}},
 \]
-where $A_I$ and $M_I$ denote instruction accesses and misses. If a modified formula is used, write the exact implemented formula here.
-\begin{table}[H]\centering
-\caption{Dynamic policy decision logic.}
-\begin{tabularx}{\linewidth}{p{0.28\linewidth}X}
-\toprule Item & Implemented choice and rationale \\
+where the \texttt{instr\_accesses}, \texttt{instr\_misses}, \texttt{total\_accesses}, and \texttt{total\_misses} counters implement these quantities. The ratio is recalculated after each leader-set callback and compared with 0.25; follower sets use I-RRIP when $R\geq0.25$ and RRIP otherwise. Once total accesses reach 4,096, the counters are reset after the ratio update. The source uses a single shared statistic rather than keeping independent utility counters for the two leader policies, so its decision is instruction-activity based rather than a direct comparison of measured miss cost between the two leader groups.
+
+\subsection{Threshold sensitivity: a source-level issue}
+The runner attempted thresholds 0.10, 0.20, 0.25, 0.30, and 0.40. The measured IPC values and cache metrics repeat exactly across those five rows. This is explained by the implementation: \texttt{dyn\_irrip.l2c\_repl} hardcodes \texttt{THRESHOLD 0.25} and never reads the \texttt{CHAMPSIM\_THRESHOLD} environment variable that the runner changes. Therefore these runs all use the same effective threshold and do \emph{not} constitute a valid threshold sensitivity experiment. The repeated table below preserves the observed results for reproducibility; it should not be used to claim that the policy is insensitive to threshold or that 0.25 is optimal.
+
+\begin{table}[H]\centering\small
+\caption{Observed Dynamic I-RRIP IPC by requested threshold. The invariance is an artifact of the compile-time constant, not evidence from a working sweep.}
+\begin{tabular}{lrrrr}
+\toprule Requested threshold & Tr1 IPC & Tr2 IPC & Tr3 IPC & Mean speedup vs RRIP \\
 \midrule
-Decision formula & \TODO{formula, variables, normalization, and zero-denominator handling} \\
-Threshold / thresholds tested & \TODO{list values} \\
-Decision direction & \TODO{which mode is selected above/below threshold} \\
-Leader-set count & \TODO{absolute count and percentage of cache sets} \\
-Leader-set placement & \TODO{how leader sets are selected / interleaved} \\
-Update interval & \TODO{every access, miss, epoch, or other trigger} \\
-Counter widths / overflow & \TODO{counter widths, reset/saturation behavior} \\
-\bottomrule
-\end{tabularx}\end{table}
+0.10 & 0.232281 & 0.256285 & 0.381742 & 1.006004 \\
+0.20 & 0.232281 & 0.256285 & 0.381742 & 1.006004 \\
+0.25 & 0.232281 & 0.256285 & 0.381742 & 1.006004 \\
+0.30 & 0.232281 & 0.256285 & 0.381742 & 1.006004 \\
+0.40 & 0.232281 & 0.256285 & 0.381742 & 1.006004 \\
+\bottomrule\end{tabular}\end{table}
+\plotpair{plots/task2b/sensitivity_ipc.png}{IPC by requested threshold}{plots/task2b/sensitivity_l2i_load_mpki.png}{L2 instruction MPKI by requested threshold}{Requested-threshold sweep; identical bars reflect the hardcoded threshold described above}{fig:t2b-sensitivity}
 
-\subsection{Threshold Sensitivity Study}
-The assignment requires testing at least five threshold values if using a threshold-based decision. Keep the trace set, simulation configuration, and other parameters fixed while sweeping the threshold.
-\begin{table}[H]\centering
-\caption{Threshold sensitivity results. Report per-trace results or clearly state the aggregation method.}
-\small
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{lrrrrrr}
-\toprule Threshold & IPC & Speedup & L2C Load MPKI & L2I Load MPKI & L2D Load MPKI & Chosen mode share (\%) \\
+\subsection{Measured policy comparison at effective threshold 0.25}
+\begin{table}[H]\centering\scriptsize
+\caption{Task 2B results. Speedup is relative to RRIP on the same trace.}
+\resizebox{\linewidth}{!}{\begin{tabular}{llrrrrr}
+\toprule Trace & Policy & IPC & Speedup & L2C Load MPKI & L2 Instruction MPKI & L2 Data MPKI \\
 \midrule
-\TODO{$\tau_1$} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
-\TODO{$\tau_2$} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
-\TODO{$\tau_3$} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
-\TODO{$\tau_4$} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
-\TODO{$\tau_5$} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
-\bottomrule
-\end{tabular}%
-}\end{table}
+Tr1.gz & RRIP baseline & 0.232231 & 1.000000 & 2.2021 & 10.5618 & 7.0769 \\
+Tr1.gz & I-RRIP & 0.232164 & 0.999711 & 2.4089 & 9.8916 & 7.7172 \\
+Tr1.gz & Dynamic I-RRIP (compiled threshold 0.25) & 0.232281 & 1.000215 & 2.3941 & 9.9094 & 7.6956 \\
+Tr2.gz & RRIP baseline & 0.251806 & 1.000000 & 2.1711 & 17.7813 & 7.9645 \\
+Tr2.gz & I-RRIP & 0.256625 & 1.019138 & 2.3754 & 13.0364 & 9.1737 \\
+Tr2.gz & Dynamic I-RRIP (compiled threshold 0.25) & 0.256285 & 1.017788 & 2.3631 & 13.3453 & 9.1221 \\
+Tr3.gz & RRIP baseline & 0.381739 & 1.000000 & 0.7090 & 1.1970 & 2.8424 \\
+Tr3.gz & I-RRIP & 0.381981 & 1.000634 & 0.7264 & 1.0221 & 2.8761 \\
+Tr3.gz & Dynamic I-RRIP (compiled threshold 0.25) & 0.381742 & 1.000008 & 0.7235 & 1.1464 & 2.8764 \\
+\bottomrule\end{tabular}}
+\end{table}
+\plotpair{plots/task2b/ipc.png}{IPC}{plots/task2b/speedup.png}{Speedup}{Task 2B policy-level IPC and speedup}{fig:t2b-ipc-speedup}
+\plotpair{plots/task2b/l2c_load_mpki.png}{L2C load MPKI}{plots/task2b/l2i_load_mpki.png}{L2 instruction-load MPKI}{Task 2B aggregate and instruction MPKI}{fig:t2b-l2c-l2i}
+\plotpair{plots/task2b/l2d_load_mpki.png}{L2 data-load MPKI}{plots/task2b/ipc_change_vs_rrip_by_threshold_pct.png}{IPC change vs. RRIP (\%)}{Task 2B data-MPKI trade-off and relative IPC change}{fig:t2b-l2d-change}
+\plotone{plots/task2b/l2i_mpki_reduction_vs_rrip_by_threshold_pct.png}{Instruction-load MPKI reduction relative to RRIP for the dynamic policy at the reported threshold.}{fig:t2b-l2i-reduction}
 
-\begin{figure}[H]\centering
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{IPC or speedup vs. decision threshold}\caption{Performance sensitivity}\end{subfigure}\hfill
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2C, L2I, and L2D load MPKI vs. threshold}\caption{MPKI sensitivity}\end{subfigure}
-\caption{Sensitivity to the dynamic decision parameter. Mark the selected operating point.}\label{fig:threshold_sensitivity}
-\end{figure}
+\subsection{Interpretation and required correction}
+At the measured effective threshold of 0.25, dynamic I-RRIP changes IPC by +0.0215\% on Tr1, +1.7788\% on Tr2, and approximately +0.0008\% on Tr3 relative to RRIP. L2 instruction MPKI declines on all three traces, while aggregate L2C and data MPKI rise. Tr2 is the clearest performance win in the supplied data; Tr1 and Tr3 are essentially neutral in IPC.
 
-\subsection{Final Configuration Results}
-\begin{table}[H]\centering
-\caption{Task 2B final dynamic I-RRIP results.}
-\small
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{llrrrrr}
-\toprule Trace & Policy & IPC & Speedup & L2C Load MPKI & L2I Load MPKI & L2D Load MPKI \\
-\midrule
-\TODO{trace} & RRIP baseline & \TODO{value} & 1.00$\times$ & \TODO{value} & \TODO{value} & \TODO{value} \\
-\TODO{trace} & Static I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
-\TODO{trace} & Dynamic I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} \\
-\TODO{add rows} & & & & & & \\
-\bottomrule
-\end{tabular}%
-}\end{table}
-
-\begin{figure}[H]\centering
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{IPC per trace: RRIP, I-RRIP, and dynamic I-RRIP}\caption{IPC}\end{subfigure}\hfill
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{Speedup per trace against RRIP baseline}\caption{Speedup}\end{subfigure}
-\vspace{0.6em}
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2C load MPKI per trace and policy}\caption{L2C load MPKI}\end{subfigure}\hfill
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2 instruction-load MPKI per trace and policy}\caption{L2 instruction MPKI}\end{subfigure}
-\vspace{0.6em}
-\begin{subfigure}{0.48\textwidth}\centering\smallplotplaceholder{L2 data-load MPKI per trace and policy}\caption{L2 data MPKI}\end{subfigure}
-\caption{Required Task 2B performance metrics.}\label{fig:dynamic_irrip_results}
-\end{figure}
-
-\subsection{Analysis and Rationale}
-\TODO{Explain why the chosen leader-set count is representative, how the threshold was selected from the sensitivity study, and why the selected configuration generalizes across traces. Discuss trade-offs and regressions as well as wins.}
+To complete the assignment's sensitivity requirement, replace the compile-time macro with a runtime parameter read from \texttt{CHAMPSIM\_THRESHOLD} (with a safe default and range check), rebuild for every threshold or ensure the runtime argument reaches the policy, and rerun all three traces at the five values. Keep leader-set placement and all other parameters fixed. Until those measurements exist, no threshold selection rationale can be inferred from this sweep.

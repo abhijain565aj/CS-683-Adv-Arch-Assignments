@@ -1,103 +1,79 @@
 \documentclass[11pt]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[a4paper,margin=0.85in]{geometry}
+\usepackage[a4paper,margin=0.78in]{geometry}
 \usepackage{graphicx,subcaption,float,booktabs,array,enumitem,microtype,xcolor,listings,amsmath,amssymb,tabularx}
 \usepackage[hidelinks]{hyperref}
 \setlist{nosep,leftmargin=*}
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{4pt}
+\setlength{\emergencystretch}{2em}
 \setcounter{tocdepth}{2}
-\renewcommand{\arraystretch}{1.15}
-
-% Common commands adapted from the supplied Assignment 1 report.
-\newcommand{\TODO}[1]{\textcolor{red}{[TODO: #1]}}
-\newcommand{\evidencebox}[2][4cm]{\fbox{\parbox[c][#1][c]{0.92\linewidth}{\centering\textbf{EVIDENCE / DIAGRAM PLACEHOLDER}\\[3pt]#2}}}
-\newcommand{\plotplaceholder}[2][4cm]{\fbox{\parbox[c][#1][c]{0.94\linewidth}{\centering\textbf{PLOT PLACEHOLDER}\\[4pt]#2\\[4pt]\small Replace this box with the generated plot; retain the caption and label.}}}
-\newcommand{\smallplotplaceholder}[1]{\plotplaceholder[3.1cm]{#1}}
+\renewcommand{\arraystretch}{1.12}
+\graphicspath{{plots/}}
+\newcommand{\plotone}[4][0.9\linewidth]{%
+  \begin{figure}[H]\centering\includegraphics[width=#1]{#2}\caption{#3}\label{#4}\end{figure}}
+\newcommand{\plotpair}[6]{%
+  \begin{figure}[H]\centering
+  \begin{subfigure}[t]{0.48\textwidth}\centering\includegraphics[width=\linewidth]{#1}\caption{#2}\end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\textwidth}\centering\includegraphics[width=\linewidth]{#3}\caption{#4}\end{subfigure}
+  \caption{#5}\label{#6}\end{figure}}
 \newcommand{\StudentOne}{Abhi Jain (23B0903)}
 \newcommand{\StudentTwo}{Deshank Pratap Singh (23B0938)}
 \newcommand{\StudentThree}{Dhruv Jain (23B0942)}
 \newcommand{\StudentFour}{Sameer Arvind Patil (23B1035)}
-
 \begin{document}
+\hypersetup{pageanchor=false}
+\pagenumbering{alph}
 \begin{titlepage}
     \centering
     {\scshape\bfseries\Huge Advanced Computer Architecture\par}
-    \vspace{0.2cm}
-    {\scshape\bfseries\Huge (CS-683)\par}
-    \vspace{0.8cm}
-    {\huge \textbf{Programming Assignment 2\\Report}\par}
-    \vspace{0.8cm}
-    {\Large Data Prefetching and Cache Replacement Policies\par}
-    \vspace{1cm}
-    {\Large \StudentOne\par}
-    {\Large \StudentTwo\par}
-    {\Large \StudentThree\par}
-    {\Large \StudentFour\par}
-    \vfill
-    {\large Autumn 2026\par}
-    {\large \textit{Report template: resolve all red TODOs and replace plot boxes before submission.}\par}
+    \vspace{0.2cm}{\scshape\bfseries\Huge (CS-683)\par}
+    \vspace{0.8cm}{\huge\textbf{Programming Assignment 2\\Report}\par}
+    \vspace{0.8cm}{\Large Data Prefetching and Cache Replacement Policies\par}
+    \vspace{1cm}{\Large\StudentOne\par}{\Large\StudentTwo\par}{\Large\StudentThree\par}{\Large\StudentFour\par}
+    \vfill{\large Autumn 2026\par}
+    {\large ChampSim measurements and implementation analysis\par}
 \end{titlepage}
-\tableofcontents
-\newpage
+\hypersetup{pageanchor=true}
+\pagenumbering{roman}\tableofcontents\newpage\pagenumbering{arabic}
 
 \section{Overview and Experimental Methodology}
 \subsection{Objectives}
-This report documents the implementation and evaluation of the Assignment 2 cache and prefetching mechanisms in ChampSim. The report is organized into Task 1A (understanding the provided IP-stride prefetcher), Task 1B (Stride Pattern Prefetching, SPP), Task 2A (instruction-conscious RRIP, I-RRIP), Task 2B (dynamic I-RRIP), and Task 3 (combining SPP with dynamic I-RRIP).
+This report analyzes the provided IP-stride prefetcher (Task 1A), the implemented Stride Pattern Prefetcher (SPP, Task 1B), instruction-conscious RRIP (Task 2A), dynamic I-RRIP (Task 2B), and a combined SPP/replacement configuration (Task 3). The report separates source-code behavior from measured performance and identifies places where the supplied experiment provenance does not support a stronger conclusion.
 
-\subsection{Experimental Setup}
+\subsection{Experimental setup}
 \begin{table}[H]\centering
-\caption{Simulation environment and configuration. Fill with the exact configuration used.}
-\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.32\linewidth}X}
-\toprule Parameter & Value / Notes \\
+\caption{Configuration recorded in the experiment runner and build script.}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.34\linewidth}X}
+\toprule Parameter & Recorded setting \\
 \midrule
-Simulator & ChampSim; \TODO{record repository commit/hash} \\
-Compiler and version & \TODO{compiler/version and relevant build flags} \\
-Host machine & \TODO{CPU, memory, OS, if relevant} \\
-Warmup instructions & 25M (per assignment specification) \\
-Simulation instructions & 25M (per assignment specification) \\
-Trace set & \TODO{list all provided traces evaluated} \\
-Baseline prefetcher & \TODO{state the no-prefetching / baseline configuration} \\
-Baseline replacement policy & \TODO{state the baseline policy} \\
-Cache configuration & \TODO{record non-default cache settings; cite config files} \\
-Repetitions / variability & \TODO{number of runs and whether results were deterministic} \\
+Simulator & ChampSim repository/fork used by the supplied runner \\
+Trace names & \texttt{Tr1.gz}, \texttt{Tr2.gz}, \texttt{Tr3.gz}; semantic workload descriptions were not supplied \\
+Warmup & 25,000,000 instructions per run \\
+Measured instructions & 25,000,000 instructions per run \\
+Core count & 1 \\
+Branch predictor & \texttt{hashed\_perceptron} \\
+L1D prefetcher & Task-dependent: \texttt{no}, \texttt{ip\_stride}, or \texttt{spp} \\
+L2 replacement & Task-dependent: LRU, RRIP, I-RRIP, or dynamic I-RRIP \\
+Other cache/TLB prefetchers and replacement & Build script sets prefetchers to \texttt{no} and other replacement policies to LRU unless configured by the task \\
+Cache parameters & Default repository settings; no separate cache-configuration override was provided \\
+Host/compiler details & Not recorded in the supplied experiment metadata \\
+Repetitions & One recorded result per trace/configuration/threshold; no repeated-run variance estimate supplied \\
 \bottomrule
 \end{tabularx}\end{table}
 
-\subsection{Metrics and Definitions}
-Use ChampSim's reported statistics where available. State units and use the same baseline definition consistently for all traces.
-\begin{itemize}
-    \item \textbf{IPC:} instructions per cycle as reported by ChampSim.
-    \item \textbf{Speedup:} $\displaystyle \frac{\mathrm{IPC}_{\mathrm{configuration}}}{\mathrm{IPC}_{\mathrm{baseline}}}$. \TODO{state precisely which baseline is used for each comparison}.
-    \item \textbf{MPKI:} misses per thousand instructions; report the relevant cache and access type (e.g., L1D load MPKI, L2 instruction-load MPKI, L2 data-load MPKI).
-    \item \textbf{Prefetch accuracy:} useful prefetches divided by issued prefetches, according to the simulator statistic definition.
-    \item \textbf{L1D coverage:} $\displaystyle \frac{M_{\mathrm{baseline}}-M_{\mathrm{prefetcher}}}{M_{\mathrm{baseline}}}$, where $M$ denotes L1D load misses for the same workload and instruction count.
-\end{itemize}
-\textit{TODO: Confirm the exact ChampSim statistic names and definitions for accuracy, coverage, and each MPKI column. Do not mix counts and normalized metrics.}
+\subsection{Metrics and baselines}
+IPC is the simulator-reported instructions-per-cycle value. Speedup is the configuration IPC divided by the task-specific baseline IPC. Task 1B uses no prefetching + LRU as baseline; Tasks 2A and 2B use RRIP as baseline; Task 3 uses no prefetching + LRU as baseline. The baseline therefore differs across tasks and must not be mixed when comparing reported speedups.
 
-\subsection{Benchmark / Trace Inventory}
-\begin{table}[H]\centering
-\caption{Traces included in the evaluation. Add one row per trace.}
-\begin{tabular}{lll}
-\toprule Trace name & Workload description (if known) & Runs completed? \\
-\midrule
-\TODO{trace 1} & \TODO{description} & $\square$ Yes / $\square$ No \\
-\TODO{trace 2} & \TODO{description} & $\square$ Yes / $\square$ No \\
-\TODO{trace 3} & \TODO{description} & $\square$ Yes / $\square$ No \\
-\TODO{add rows as needed} & & \\
-\bottomrule
-\end{tabular}\end{table}
+MPKI is misses per thousand measured instructions. L1D and aggregate L2C load MPKI are derived from reported load-miss counters using 25M as the measured-instruction denominator when the parser does not find a direct MPKI line. L2 instruction-load and L2 data-load MPKI are separate simulator counters. In these files, the aggregate L2C load-MPKI field and the instruction/data category counters do not add up to one another; they should be interpreted as separately reported statistics, not as arithmetic components of a common total.
 
-\subsection{Reproducibility and Correctness Checks}
-\begin{itemize}
-    \item $\square$ Verify that warmup and simulation instruction counts are 25M each.
-    \item $\square$ Record exact commands/configurations and save raw simulator output for every trace.
-    \item $\square$ Check that every configuration uses identical traces and instruction counts.
-    \item $\square$ Verify every reported table value against raw output or a documented calculation.
-    \item $\square$ Keep code changes and results aligned with the repository commit history.
-\end{itemize}
-\TODO{Describe failed runs, excluded traces, or deviations from the specified setup. If none, explicitly write “None.”}
+Prefetch accuracy is reported as the percentage of issued L1D prefetches later used, using the runner's parsed useful/issued counters where available. It is not applicable to a no-prefetch configuration, so the tables use N/A rather than interpreting the raw zero as measured accuracy. L1D coverage is calculated per trace as $(M_{\mathrm{baseline}}-M_{\mathrm{prefetcher}})/M_{\mathrm{baseline}}\times100\%$, where $M$ is the count of L1D load misses and the baseline is no-prefetch + LRU.
+
+\subsection{Trace inventory and result provenance}
+All reported rows correspond to the three trace names listed above and record 25M warmup plus 25M measured instructions in the raw JSON exports. The CSV and JSON exports are included in this archive. The raw JSON files reference simulator-log paths, but those log files were not included in the data archive supplied for report preparation.
+
+\textbf{Two important provenance limits.} First, the five Task 2B threshold values have identical measured outputs. The supplied \texttt{dyn\_irrip.l2c\_repl} defines \texttt{THRESHOLD 0.25} at compile time and does not read \texttt{CHAMPSIM\_THRESHOLD}; the runner's environment-variable sweep therefore does not actually change this policy. Second, Task 3 result metadata identifies the combined replacement as \texttt{dyn\_irrip}; the separate prefetch-aware implementation is in \texttt{prefetch\_irrip.l2c\_repl}. The supplied Task 3 measurements cannot be claimed as an evaluation of the prefetch-aware file. Both issues are described in their respective sections rather than hidden behind the repeated results.
 
 \newpage\input{task1a}
 \newpage\input{task1b}
@@ -105,38 +81,18 @@ Use ChampSim's reported statistics where available. State units and use the same
 \newpage\input{task2b}
 \newpage\input{task3}
 \newpage
-
 \section{Overall Comparison and Conclusion}
-\subsection{Across-Task Summary}
-\TODO{Summarize the best-performing configuration per trace and compare baseline, SPP, I-RRIP, dynamic I-RRIP, and the combined design. Tie comparisons to measured data.}
-\begin{table}[H]\centering
-\caption{Overall results summary. Add rows for each trace or provide a separate table per trace.}
-\resizebox{\linewidth}{!}{%
-\begin{tabular}{lccccc}
-\toprule Configuration & IPC & Speedup & L1D Load MPKI & L2 Load MPKI & Notes \\
-\midrule
-Baseline & \TODO{value} & 1.00$\times$ & \TODO{value} & \TODO{value} & \TODO{baseline details} \\
-IP-stride & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{if measured} \\
-SPP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{result} \\
-I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{result} \\
-Dynamic I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{result} \\
-SPP + Dynamic I-RRIP & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{value} & \TODO{result} \\
-\bottomrule
-\end{tabular}%
-}\end{table}
-
-\subsection{Limitations and Future Work}
-\TODO{Discuss measurement limitations, outlier traces, storage/performance trade-offs, untested alternatives, and follow-up work. Do not claim an effect unsupported by experiments.}
-
-\subsection{Submission Checklist}
+\subsection{Cross-task findings}
 \begin{itemize}
-    \item $\square$ Every red TODO has been resolved or intentionally removed.
-    \item $\square$ Every plot placeholder has been replaced with a real plot (or removed if inapplicable).
-    \item $\square$ Tables contain measured values with units and stated baselines.
-    \item $\square$ Figures have descriptive captions, axes, legends, and readable labels.
-    \item $\square$ Storage overhead includes a bit-level breakdown and total.
-    \item $\square$ Task 2B sensitivity includes at least five decision-parameter settings.
-    \item $\square$ Results and conclusions agree with the implementation and raw outputs.
-    \item $\square$ The final report compiles; no missing-figure boxes remain.
+\item \textbf{Task 1B:} IP-stride has the highest IPC of the tested prefetcher configurations on all three traces. SPP reduces L1D MPKI relative to the no-prefetch baseline on all traces, but less than IP-stride, and has lower reported accuracy than IP-stride on all three traces.
+\item \textbf{Task 2A:} I-RRIP lowers L2 instruction-load MPKI on all three traces, but increases L2 data-load MPKI and aggregate L2C load MPKI. IPC improves most on Tr2; Tr1 is marginally lower than the RRIP baseline.
+\item \textbf{Task 2B:} At the compiled threshold of 0.25, dynamic I-RRIP gives its largest IPC gain on Tr2. The supplied five-threshold run is not a valid sensitivity study because the policy has a compile-time threshold; no optimal threshold can be selected from these data.
+\item \textbf{Task 3:} The combined result as recorded is better than standalone dynamic I-RRIP by a very small margin on Tr2, but does not beat SPP on Tr1 or Tr3. Because the experiment used \texttt{dyn\_irrip} rather than the separate prefetch-aware implementation, this result does not establish whether prefetch-aware replacement meets the assignment's goal.
 \end{itemize}
+
+\subsection{Limitations and next steps}
+The most important follow-up is to make the dynamic threshold truly runtime-configurable, rebuild, and rerun the five-threshold sweep. For Task 3, integrate the prefetch-awareness behavior into the policy actually named by the runner (the assignment specifies \texttt{dyn\_irrip.l2c\_repl}) or run the supplied \texttt{prefetch\_irrip} replacement explicitly; then regenerate the result CSVs and plots from those new logs. If small IPC differences are to be emphasized, repeat runs or another measure of run-to-run variability would also help. Trace semantic descriptions, compiler/host metadata, and complete raw logs should be retained for a reproducible final submission.
+
+\subsection{Conclusion}
+The measured results demonstrate that instruction-conscious replacement can reduce instruction MPKI, but at the cost of higher data MPKI on these traces. The supplied SPP achieves only small coverage gains, and IP-stride outperforms it in the current data. Most importantly, the current artifacts expose two experiment-validity gaps—the ineffective Task 2B sweep and a Task 3 policy/configuration mismatch—which should be corrected before asserting that the complete assignment goals have been met.
 \end{document}

@@ -109,10 +109,25 @@ Compiling prefetcher/llc_prefetcher.cc...
 Generating dependencies for prefetcher/itlb_prefetcher.cc...
 Compiling prefetcher/itlb_prefetcher.cc...
 Linking bin/champsim...
-/usr/bin/ld: obj/prefetcher/l1d_prefetcher.o:/workspace/Assignment-2/prefetcher/l1d_prefetcher.cc:66: multiple definition of `prefetched'; obj/replacement/l2c_replacement.o:/workspace/Assignment-2/replacement/l2c_replacement.cc:9: first defined here
-collect2: error: ld returned 1 exit status
-make[1]: *** [Makefile:46: bin/champsim] Error 1
 make[1]: Leaving directory '/workspace/Assignment-2'
 
-ChampSim build FAILED!
+ChampSim is successfully built
+Branch Predictor: hashed_perceptron
+L1I Prefetcher: no
+L1D Prefetcher: spp
+L2C Prefetcher: no
+LLC Prefetcher: no
+ITLB Prefetcher: no
+DTLB Prefetcher: no
+STLB Prefetcher: no
+BTB Replacement: lru
+L1I Replacement: lru
+L1D Replacement: lru
+L2C Replacement: dyn_irrip
+LLC Replacement: lru
+ITLB Replacement: lru
+DTLB Replacement: lru
+STLB Replacement: lru
+Cores: 1
+Binary: bin/hashed_perceptron-no-spp-no-no-no-no-no-lru-lru-lru-dyn_irrip-lru-lru-lru-lru-1core-runner-combined
 
