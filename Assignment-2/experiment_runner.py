@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
 import os
 import re
 import shlex
@@ -47,7 +46,7 @@ EXPERIMENTS = {
         "dynamic_irrip", "no", "dyn_irrip", "No prefetching + Dynamic I-RRIP"
     ),
     "combined": Experiment(
-        "combined", "spp", "prefetch_irrip", "SPP + prefetch-aware Dynamic I-RRIP"
+        "combined", "spp", "dyn_irrip", "SPP + prefetch-aware Dynamic I-RRIP"
     ),
 }
 
@@ -81,9 +80,9 @@ CSV_FIELDS = {
                "l2i_load_mpki", "l2d_load_mpki"],
     "task2b": ["trace", "configuration", "threshold", "ipc", "speedup",
                "l2c_load_mpki", "l2i_load_mpki", "l2d_load_mpki"],
-    "task3": ["trace", "configuration", "l1d_prefetcher", "l2_replacement", "threshold",
-              "ipc", "speedup", "prefetch_accuracy_pct", "l1d_coverage_pct",
-              "l1d_load_mpki", "l2c_load_mpki", "l2i_load_mpki", "l2d_load_mpki"],
+    "task3": ["trace", "configuration", "l1d_prefetcher", "l2_replacement", "threshold", "ipc", "speedup",
+              "prefetch_accuracy_pct", "l1d_coverage_pct", "l1d_load_mpki",
+              "l2c_load_mpki", "l2i_load_mpki", "l2d_load_mpki"],
 }
 
 # A no-prefetch configuration has no meaningful prefetch accuracy.
@@ -448,16 +447,9 @@ def write_task_data(task: str, rows: list[dict]) -> None:
 
 def run_task(task: str, traces: list[Path], warmup: int, simulation: int,
              thresholds: list[float], fixed_threshold: float, debug: bool,
-             resume: bool = False, stage: Optional[str] = None) -> list[dict]:
-    """Run every task configuration, or just one named configuration via --stage."""
-    task_stages = TASK_EXPERIMENTS[task]
-    if stage is not None and stage not in task_stages:
-        valid = ", ".join(task_stages)
-        raise ValueError(f"Stage '{stage}' is not part of {task}. Valid stages: {valid}")
-
-    selected_stages = (stage,) if stage is not None else task_stages
+             resume: bool = False) -> list[dict]:
     rows = []
-    for name in selected_stages:
+    for name in TASK_EXPERIMENTS[task]:
         experiment = EXPERIMENTS[name]
         if task == "task2b" and name == "dynamic_irrip":
             selected_thresholds = thresholds
@@ -486,68 +478,6 @@ def run_task(task: str, traces: list[Path], warmup: int, simulation: int,
 
 
 
-def _row_key(row: dict, task: str) -> tuple[str, str, Optional[str]]:
-    """Stable identity for one trace/configuration and (for Task 2B) threshold."""
-    # Task 2B intentionally stores multiple threshold runs for each trace. Task 3
-    # uses one selected fixed threshold per configuration, so a targeted rerun at
-    # a new fixed threshold should replace that configuration's previous row.
-    threshold = row.get("threshold") if task == "task2b" else None
-    if threshold in (None, ""):
-        threshold_key = None
-    else:
-        try:
-            threshold_key = f"{float(threshold):.12g}"
-        except (TypeError, ValueError):
-            threshold_key = str(threshold)
-    return (str(row.get("trace", "")), str(row.get("configuration", "")), threshold_key)
-
-
-def _load_existing_task_rows(task: str) -> list[dict]:
-    """Load existing JSON results; fall back to CSV if JSON is absent."""
-    raw_path = DATA_DIR / f"{task}_raw.json"
-    if raw_path.is_file():
-        loaded = json.loads(raw_path.read_text())
-        if not isinstance(loaded, list):
-            raise RuntimeError(f"Expected a list of result rows in {raw_path}")
-        return loaded
-
-    csv_path = CSV_PATHS[task]
-    if not csv_path.is_file():
-        return []
-    with csv_path.open(newline="") as handle:
-        loaded = list(csv.DictReader(handle))
-    numeric_fields = set(CSV_FIELDS[task]) - {"trace", "configuration", "l1d_prefetcher", "l2_replacement"}
-    for row in loaded:
-        for field in numeric_fields:
-            value = row.get(field)
-            if value in (None, ""):
-                row[field] = None
-                continue
-            try:
-                row[field] = float(value)
-            except (TypeError, ValueError):
-                pass
-        if row.get("threshold") is None:
-            row["threshold"] = None
-    return loaded
-
-
-def merge_task_rows(task: str, new_rows: list[dict]) -> list[dict]:
-    """Merge targeted reruns into saved results, replacing only matching row keys."""
-    merged = _load_existing_task_rows(task)
-    positions = {_row_key(row, task): index for index, row in enumerate(merged)}
-    for row in new_rows:
-        key = _row_key(row, task)
-        if key in positions:
-            merged[positions[key]] = row
-        else:
-            positions[key] = len(merged)
-            merged.append(row)
-    # Derive speedup/coverage after merging so they can use the preserved baseline row.
-    add_derived_metrics(merged, task)
-    return merged
-
-
 def reparse_task(task: str) -> None:
     """Rebuild CSV/plots from saved ChampSim logs without another simulation."""
     raw_path = DATA_DIR / f"{task}_raw.json"
@@ -563,9 +493,9 @@ def reparse_task(task: str) -> None:
         output = log_path.read_text(errors="replace")
         # Remove stale parser outputs but keep configuration and run metadata.
         for key in list(row):
-            if key not in {"trace", "configuration", "description", "l1d_prefetcher",
-                           "l2_replacement", "threshold", "warmup_instructions",
-                           "simulation_instructions", "log"}:
+            if key not in {"trace", "configuration", "description", "threshold",
+                           "l1d_prefetcher", "l2_replacement",
+                           "warmup_instructions", "simulation_instructions", "log"}:
                 del row[key]
         metrics = parse_output(output, int(row["simulation_instructions"]))
         if "ipc" not in metrics:
@@ -577,18 +507,16 @@ def reparse_task(task: str) -> None:
 
 
 def save_figure(fig, output_base: Path) -> None:
-    """Save high-resolution PNG plots only (no PDF sidecars)."""
-    output_base.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output_base.with_suffix(".png"), dpi=220, bbox_inches="tight")
+    fig.tight_layout()
+    fig.savefig(output_base.with_suffix(".png"), dpi=180)
+    fig.savefig(output_base.with_suffix(".pdf"))
 
 
 def plot_task(task: str) -> None:
-    """Plot measured results with data-aware axes and a few task-specific effect charts."""
     try:
         import matplotlib
-        matplotlib.use("Agg")
+        matplotlib.use("Agg")  # Works in Docker/headless environments.
         import matplotlib.pyplot as plt
-        from matplotlib.ticker import MaxNLocator
     except ImportError as exc:
         raise RuntimeError("Install matplotlib to generate plots") from exc
 
@@ -603,529 +531,77 @@ def plot_task(task: str) -> None:
     output_dir = PLOTS_DIR / task
     output_dir.mkdir(parents=True, exist_ok=True)
     traces = list(dict.fromkeys(row["trace"] for row in rows))
-    trace_labels = []
-    for trace in traces:
-        name = Path(trace).name
-        for suffix in (".champsimtrace.xz", ".champsimtrace.gz", ".champsimtrace",
-                       ".trace.xz", ".trace.gz", ".trace", ".gz", ".xz"):
-            if name.lower().endswith(suffix):
-                name = name[:-len(suffix)]
-                break
-        match = re.fullmatch(r"(?i:tr(?:ace)?)[_ -]?(\d+)", name)
-        trace_labels.append(f"Trace {int(match.group(1))}" if match else name)
-
-    task_titles = {
-        "task1b": "Task 1B — Stride Pattern Prefetching (SPP)",
-        "task2a": "Task 2A — Instruction-Conscious L2 Replacement (I-RRIP)",
-        "task2b": "Task 2B — Dynamic I-RRIP",
-        "task3": "Task 3 — SPP + Prefetch-Aware Dynamic I-RRIP",
-    }
-    config_labels = {
-        "baseline": "Baseline (No Prefetch)",
-        "ip_stride": "IP-stride",
-        "spp": "SPP",
-        "rrip": "RRIP",
-        "irrip": "I-RRIP",
-        "dynamic_irrip": "Dynamic I-RRIP",
-        "combined": "SPP + Prefetch-aware Dynamic I-RRIP",
-    }
-    config_colors = {
-        "baseline": "#8C8C8C",
-        "ip_stride": "#4C72B0",
-        "spp": "#55A868",
-        "rrip": "#4C72B0",
-        "irrip": "#DD8452",
-        "dynamic_irrip": "#8172B2",
-        "combined": "#64B5CD",
-    }
-    threshold_colors = ["#4C72B0", "#55A868", "#C44E52", "#8172B2", "#CCB974"]
-    task_metric_titles = {
-        "ipc": "Instructions Per Cycle (IPC)",
-        "speedup": "Speedup Relative to Task Baseline",
-        "l1d_load_mpki": "L1 Data Cache Load MPKI",
-        "l2c_load_mpki": "L2 Cache Load MPKI",
-        "l2i_load_mpki": "L2 Instruction Load MPKI",
-        "l2d_load_mpki": "L2 Data Load MPKI",
-        "prefetch_accuracy_pct": "L1D Prefetch Accuracy",
-        "l1d_coverage_pct": "L1D Load-Miss Coverage",
-    }
-
-    def get_number(row: dict, metric: str) -> Optional[float]:
-        raw = row.get(metric)
-        if raw in (None, ""):
-            return None
-        try:
-            return float(raw)
-        except (TypeError, ValueError):
-            return None
-
-    def metric_label(metric: str) -> str:
-        return METRIC_LABELS.get(metric, metric.replace("_", " ").title())
-
-    def metric_title(metric: str) -> str:
-        return task_metric_titles.get(metric, metric_label(metric))
-
-    def format_value(metric: str, value: float) -> str:
-        if metric in ("prefetch_accuracy_pct", "l1d_coverage_pct"):
-            return f"{value:.1f}%"
-        if metric in ("ipc",):
-            return f"{value:.3f}"
-        if metric == "speedup":
-            return f"{value:.4f}"
-        return f"{value:.2f}"
-
-    def nice_step(value: float, target_ticks: int = 6) -> float:
-        """Return a readable tick step near value / target_ticks."""
-        if value <= 0:
-            return 1.0
-        raw = value / target_ticks
-        power = 10.0 ** math.floor(math.log10(raw))
-        fraction = raw / power
-        choices = (1.0, 2.0, 2.5, 5.0, 10.0)
-        chosen = min(choices, key=lambda candidate: abs(math.log(candidate / fraction)))
-        return chosen * power
-
-    def nice_ceil(value: float, target_ticks: int = 6) -> float:
-        step = nice_step(value, target_ticks)
-        return max(step, math.ceil((value - 1e-12) / step) * step)
-
-    def nice_floor(value: float, target_ticks: int = 6) -> float:
-        step = nice_step(abs(value), target_ticks)
-        return math.floor((value + 1e-12) / step) * step
-
-    def style_axes(ax, metric: str, values: list[float]) -> None:
-        finite = [v for v in values if v is not None]
-        if not finite:
-            finite = [0.0]
-        maximum = max(finite)
-        minimum = min(finite)
-        if metric == "speedup":
-            # Speedup is a ratio centred on 1.0, so bars start at the no-change
-            # reference, and the explicitly labelled zoomed axis shows small effects.
-            deviation = max([abs(v - 1.0) for v in finite] + [0.002])
-            padding = max(0.0015, deviation * 0.22)
-            ax.set_ylim(min(minimum, 1.0) - padding, max(maximum, 1.0) + padding)
-            ax.axhline(1.0, color="#B44A4A", linestyle="--", linewidth=1.25,
-                       label="No speedup (1.0)", zorder=2)
-            ax.set_ylabel("Speedup ratio (1.0 = no change; zoomed axis)")
-        elif metric in ("prefetch_accuracy_pct", "l1d_coverage_pct"):
-            # Percentage plots use the observed range, not a fixed 0–100% range.
-            # This helps distinguish values such as 0.3% from 1.2% while keeping
-            # the natural zero reference and never exceeding 100% on the top end.
-            positive_max = max(0.0, maximum)
-            upper = min(100.0, nice_ceil(max(positive_max * 1.10, 0.01)))
-            lower = 0.0 if minimum >= 0 else nice_floor(minimum * 1.15)
-            ax.set_ylim(lower, max(upper, lower + 0.01))
-            if metric == "l1d_coverage_pct":
-                ax.axhline(0, color="#555555", linewidth=0.8, zorder=2)
-            ax.set_ylabel(metric_label(metric))
-        else:
-            positive_max = max(0.0, maximum)
-            upper = nice_ceil(max(positive_max * 1.10, 0.01))
-            lower = min(0.0, nice_floor(minimum * 1.10)) if minimum < 0 else 0.0
-            ax.set_ylim(lower, max(upper, lower + 0.01))
-            ax.set_ylabel(metric_label(metric))
-        ax.yaxis.set_major_locator(MaxNLocator(nbins=6, min_n_ticks=4))
-        ax.grid(axis="y", linestyle="--", alpha=0.28, linewidth=0.7)
-        ax.set_axisbelow(True)
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-
-    def add_bar_labels(ax, containers, metric: str, enabled: bool = True) -> None:
-        if not enabled:
-            return
-        for container in containers:
-            for bar in container:
-                if metric == "speedup":
-                    # Speedup bars are deviations from 1.0 but labels show the ratio.
-                    endpoint = bar.get_y() + bar.get_height()
-                    label_value = endpoint
-                    positive = bar.get_height() >= 0
-                    y = endpoint
-                else:
-                    label_value = bar.get_height()
-                    y = bar.get_y() + bar.get_height()
-                    positive = bar.get_height() >= 0
-                offset = 2 if positive else -2
-                ax.annotate(
-                    format_value(metric, label_value),
-                    xy=(bar.get_x() + bar.get_width() / 2, y),
-                    xytext=(0, offset), textcoords="offset points",
-                    ha="center", va="bottom" if positive else "top",
-                    fontsize=7, clip_on=False,
-                )
-
-    def grouped_bars(ax, x_positions, categories, series, metric: str,
-                     colors, category_axis_label: str, label_values: bool = True):
-        """series is an ordered list of (legend label, values keyed by category)."""
-        count = max(1, len(series))
-        cluster_width = 0.82
-        bar_width = cluster_width / count
-        containers, plotted_values = [], []
-        for series_index, (label, values_by_category) in enumerate(series):
-            offset = (series_index - (count - 1) / 2) * bar_width
-            xs, ys = [], []
-            for index, category in enumerate(categories):
-                value = values_by_category.get(category)
-                if value is None:
-                    continue
-                xs.append(x_positions[index] + offset)
-                ys.append(value)
-                plotted_values.append(value)
-            if not xs:
-                continue
-            color = colors[series_index % len(colors)]
-            if metric == "speedup":
-                container = ax.bar(xs, [value - 1.0 for value in ys], bottom=1.0,
-                                   width=bar_width * 0.94, label=label, color=color,
-                                   edgecolor="white", linewidth=0.45, zorder=3)
-            else:
-                container = ax.bar(xs, ys, width=bar_width * 0.94, label=label,
-                                   color=color, edgecolor="white", linewidth=0.45,
-                                   zorder=3)
-            containers.append(container)
-        add_bar_labels(ax, containers, metric, enabled=label_values)
-        ax.set_xticks(x_positions)
-        ax.set_xticklabels(categories)
-        ax.set_xlabel(category_axis_label)
-        style_axes(ax, metric, plotted_values)
-        return containers, plotted_values
-
-    def color_for_label(label: str) -> str:
-        if label.startswith("Baseline"):
-            config = "baseline"
-        elif label == "IP-stride":
-            config = "ip_stride"
-        elif label == "SPP":
-            config = "spp"
-        elif label == "RRIP":
-            config = "rrip"
-        elif label == "I-RRIP":
-            config = "irrip"
-        elif label.startswith("Dynamic I-RRIP"):
-            config = "dynamic_irrip"
-        elif label.startswith("SPP +"):
-            config = "combined"
-        else:
-            config = "baseline"
-        return config_colors.get(config, "#4C72B0")
-
-    def prepare_comparison_series(metric: str):
-        task_rows = rows
-        ref_threshold = None
-        if task == "task2b":
-            available = sorted({
-                float(row["threshold"]) for row in rows
-                if row.get("configuration") == "dynamic_irrip"
-                and row.get("threshold") not in (None, "")
-            })
-            if available:
-                ref_threshold = min(available, key=lambda value: abs(value - DEFAULT_FIXED_THRESHOLD))
-            task_rows = [
-                row for row in rows
-                if row.get("configuration") in ("rrip", "irrip")
-                or (row.get("configuration") == "dynamic_irrip"
-                    and ref_threshold is not None
-                    and row.get("threshold") not in (None, "")
-                    and abs(float(row["threshold"]) - ref_threshold) < 1e-9)
-            ]
-
-        order = ("rrip", "irrip", "dynamic_irrip") if task == "task2b" else TASK_EXPERIMENTS[task]
-        assembled = []
-        for config in order:
-            # Accuracy is undefined when a configuration issues no prefetches.
-            if metric == "prefetch_accuracy_pct" and config in {
-                "baseline", "rrip", "irrip", "dynamic_irrip"
-            }:
-                continue
-            config_rows = [row for row in task_rows if row.get("configuration") == config]
-            values_by_trace = {}
-            for row in config_rows:
-                value = get_number(row, metric)
-                if value is not None:
-                    values_by_trace[row["trace"]] = value
-            if not values_by_trace:
-                continue
-            label = config_labels.get(config, config)
-            if task == "task2b" and config == "dynamic_irrip" and ref_threshold is not None:
-                label = f"Dynamic I-RRIP (threshold={ref_threshold:g})"
-            assembled.append((label, values_by_trace))
-        return assembled, ref_threshold
-
-    def value_by_config_trace(configuration: str, metric: str, trace: str) -> Optional[float]:
-        candidates = [row for row in rows if row.get("configuration") == configuration
-                      and row.get("trace") == trace]
-        if task == "task2b" and configuration == "dynamic_irrip":
-            candidates = [row for row in candidates if row.get("threshold") not in (None, "")]
-            if not candidates:
-                return None
-            chosen = min(candidates, key=lambda row: abs(float(row["threshold"]) - DEFAULT_FIXED_THRESHOLD))
-            return get_number(chosen, metric)
-        return get_number(candidates[0], metric) if candidates else None
-
-    def plot_effect_chart(filename: str, title: str, ylabel: str, categories: list[str],
-                          series: list[tuple[str, dict[str, float]]], colors: list[str],
-                          label_values: bool = True) -> None:
-        """Draw changes/reductions around zero; unlike absolute bars, effects are directly comparable."""
-        if not series:
-            return
-        fig_width = max(8.8, 2.1 * len(categories) + 0.8 * len(series))
-        fig, ax = plt.subplots(figsize=(fig_width, 5.2))
-        count = len(series)
-        cluster_width = 0.78
-        bar_width = cluster_width / count
-        all_values = []
-        containers = []
-        for s_idx, (label, vals) in enumerate(series):
-            xs, ys = [], []
-            offset = (s_idx - (count - 1) / 2) * bar_width
-            for i, category in enumerate(categories):
-                value = vals.get(category)
-                if value is None:
-                    continue
-                xs.append(i + offset)
-                ys.append(value)
-                all_values.append(value)
-            if xs:
-                color = colors[s_idx % len(colors)]
-                cont = ax.bar(xs, ys, width=bar_width * 0.93, label=label,
-                              color=color, edgecolor="white", linewidth=0.45, zorder=3)
-                containers.append(cont)
-        if not all_values:
-            plt.close(fig)
-            return
-        ax.axhline(0, color="#555555", linewidth=1.0, zorder=2)
-        minimum, maximum = min(all_values), max(all_values)
-        # Keep zero visible, but do not waste half the chart when every effect
-        # is beneficial (or detrimental). If signs are mixed, preserve room for both.
-        if minimum >= 0:
-            lower = 0.0
-            upper = nice_ceil(max(maximum * 1.15, 0.01), target_ticks=5)
-        elif maximum <= 0:
-            lower = nice_floor(minimum * 1.15, target_ticks=5)
-            upper = 0.0
-        else:
-            lower = nice_floor(minimum * 1.15, target_ticks=5)
-            upper = nice_ceil(maximum * 1.15, target_ticks=5)
-        ax.set_ylim(lower, upper if upper > lower else lower + 0.01)
-        ax.yaxis.set_major_locator(MaxNLocator(nbins=6, min_n_ticks=4))
-        ax.grid(axis="y", linestyle="--", alpha=0.28, linewidth=0.7)
-        ax.set_axisbelow(True)
-        ax.set_ylabel(ylabel)
-        ax.set_xticks(list(range(len(categories))))
-        ax.set_xticklabels(categories)
-        ax.set_xlabel("Benchmark trace" if categories and categories[0].startswith("Trace") else "Decision threshold")
-        ax.set_title(title, fontsize=12, fontweight="semibold", pad=12)
-        ax.spines["top"].set_visible(False)
-        ax.spines["right"].set_visible(False)
-        if label_values:
-            for cont in containers:
-                for bar in cont:
-                    val = bar.get_height()
-                    label = f"{val:+.2f}%" if abs(val) < 1 else f"{val:+.1f}%"
-                    ax.annotate(label,
-                                xy=(bar.get_x() + bar.get_width() / 2, val),
-                                xytext=(0, 2 if val >= 0 else -2),
-                                textcoords="offset points", ha="center",
-                                va="bottom" if val >= 0 else "top", fontsize=7,
-                                clip_on=False)
-        if len(series) > 1:
-            ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16),
-                      ncol=min(3, len(series)), frameon=False, fontsize=8.5)
-            fig.tight_layout(rect=(0, 0.08, 1, 1))
-        else:
-            fig.tight_layout()
-        save_figure(fig, output_dir / filename)
-        plt.close(fig)
-
     plotted = []
-    # Required absolute metric charts. Percentage axes scale to the observed data range;
-    # speedup bars are drawn around 1.0 so small differences remain visible and explicit.
+
+    # Report comparison charts: one curve per configuration and threshold.
     for metric in REPORT_METRICS[task]:
-        series, ref_threshold = prepare_comparison_series(metric)
-        if not series:
-            print(f"WARNING: No values of {metric} for {task}; plot skipped", file=sys.stderr)
-            continue
-        labels = [label for label, _ in series]
-        categories = [trace_labels[index] for index in range(len(traces))]
-        pretty_series = []
-        for label, values_by_trace in series:
-            pretty_series.append((label, {
-                trace_labels[index]: values_by_trace[trace]
-                for index, trace in enumerate(traces) if trace in values_by_trace
-            }))
-        fig_width = max(9.5, 2.25 * len(categories) + 0.8 * len(labels))
-        fig, ax = plt.subplots(figsize=(fig_width, 5.7))
-        colors = [color_for_label(label) for label in labels]
-        grouped_bars(ax, list(range(len(categories))), categories, pretty_series, metric,
-                     colors, "Benchmark trace", label_values=(len(labels) <= 4))
-        title = f"{task_titles[task]}\n{metric_title(metric)} by Configuration"
-        if metric == "speedup":
-            title += " (zoomed around 1.0; 1.0 = no change)"
-        if task == "task2b" and ref_threshold is not None:
-            title += f" (reference threshold = {ref_threshold:g})"
-        ax.set_title(title, fontsize=12, fontweight="semibold", pad=12)
-        ax.margins(x=0.04)
-        # Keep the reference-line legend entry in speedup charts as well.
-        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.17),
-                  ncol=min(3, len(labels) + (1 if metric == "speedup" else 0)),
-                  frameon=False, fontsize=8.5)
-        fig.tight_layout(rect=(0, 0.08, 1, 1))
-        save_figure(fig, output_dir / metric)
-        plotted.append(metric)
+        fig, ax = plt.subplots(figsize=(10, 5))
+        series = {}
+        for row in rows:
+            raw = row.get(metric)
+            if raw in (None, ""):
+                continue
+            label = row["configuration"]
+            if task == "task2b" and label == "dynamic_irrip":
+                label += f" (threshold={float(row['threshold']):g})"
+            series.setdefault(label, {})[row["trace"]] = float(raw)
+        for label, data in series.items():
+            xs = [trace for trace in traces if trace in data]
+            if xs:
+                ax.plot(xs, [data[x] for x in xs], marker="o", label=label)
+        if series:
+            ax.set_xlabel("Trace")
+            ax.set_ylabel(METRIC_LABELS[metric])
+            ax.set_title(f"{task.upper()} — {METRIC_LABELS[metric]}")
+            ax.tick_params(axis="x", labelrotation=30)
+            ax.grid(True, alpha=0.3)
+            ax.legend(fontsize=9)
+            save_figure(fig, output_dir / metric)
+            plotted.append(metric)
+        else:
+            print(f"WARNING: No values of {metric} for {task}; plot skipped",
+                  file=sys.stderr)
         plt.close(fig)
 
+    # For the threshold sensitivity study, also plot metric vs threshold,
+    # separately for each trace. The fixed RRIP and I-RRIP runs are not
+    # included in these plots because their policy has no threshold.
     if task == "task2b":
-        dynamic = [row for row in rows if row.get("configuration") == "dynamic_irrip"
+        dynamic = [row for row in rows if row["configuration"] == "dynamic_irrip"
                    and row.get("threshold") not in (None, "")]
-        thresholds = sorted({float(row["threshold"]) for row in dynamic})
-        if thresholds:
-            threshold_categories = [f"{value:.2f}" for value in thresholds]
-            for metric in REPORT_METRICS[task]:
-                series = []
-                for trace in traces:
-                    values_by_threshold = {}
-                    for row in dynamic:
-                        if row["trace"] != trace:
-                            continue
-                        value = get_number(row, metric)
-                        if value is not None:
-                            values_by_threshold[f"{float(row['threshold']):.2f}"] = value
-                    if values_by_threshold:
-                        series.append((trace_labels[traces.index(trace)], values_by_threshold))
-                if not series:
-                    continue
-                fig_width = max(9.5, 1.5 * len(threshold_categories) + 1.7 * len(series))
-                fig, ax = plt.subplots(figsize=(fig_width, 5.7))
-                grouped_bars(ax, list(range(len(threshold_categories))), threshold_categories,
-                             series, metric, threshold_colors, "Dynamic I-RRIP threshold",
-                             label_values=False)
-                title = f"Task 2B — Threshold Sensitivity\n{metric_title(metric)} by Decision Threshold"
-                if metric == "speedup":
-                    title += " (zoomed around 1.0; 1.0 = no change)"
-                ax.set_title(title, fontsize=12, fontweight="semibold", pad=12)
-                ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.17),
-                          ncol=min(3, len(series)), frameon=False, fontsize=8.5,
-                          title="Benchmark trace")
-                fig.tight_layout(rect=(0, 0.08, 1, 1))
+        for metric in REPORT_METRICS[task]:
+            fig, ax = plt.subplots(figsize=(9, 5))
+            found = False
+            for trace in traces:
+                pairs = sorted(
+                    (float(row["threshold"]), float(row[metric]))
+                    for row in dynamic
+                    if row["trace"] == trace and row.get(metric) not in (None, "")
+                )
+                if pairs:
+                    ax.plot([x for x, _ in pairs], [y for _, y in pairs],
+                            marker="o", label=trace)
+                    found = True
+            if found:
+                ax.set_xlabel("Dynamic I-RRIP threshold")
+                ax.set_ylabel(METRIC_LABELS[metric])
+                ax.set_title(f"Task 2B sensitivity — {METRIC_LABELS[metric]}")
+                ax.grid(True, alpha=0.3)
+                ax.legend(fontsize=8, loc="best")
                 save_figure(fig, output_dir / f"sensitivity_{metric}")
                 plotted.append(f"sensitivity_{metric}")
-                plt.close(fig)
+            else:
+                print(f"WARNING: No sensitivity data for {metric}", file=sys.stderr)
+            plt.close(fig)
 
-    # Extra diagnostic plots: percentage deltas are easier to compare than tiny raw IPC changes.
-    if task == "task1b":
-        base_cfg, comparators = "baseline", ["ip_stride", "spp"]
-        effect_specs = [
-            ("ipc_change_vs_baseline_pct", "IPC Change vs No-Prefetch Baseline",
-             "IPC change vs baseline (%)", "ipc", "change"),
-            ("l1d_mpki_reduction_vs_baseline_pct", "L1D Load-MPKI Reduction vs Baseline",
-             "L1D load-MPKI reduction (%)", "l1d_load_mpki", "reduction"),
-        ]
-        for filename, title, ylabel, metric, effect in effect_specs:
-            series = []
-            for cfg in comparators:
-                vals = {}
-                for trace, pretty in zip(traces, trace_labels):
-                    ref = value_by_config_trace(base_cfg, metric, trace)
-                    value = value_by_config_trace(cfg, metric, trace)
-                    if ref not in (None, 0) and value is not None:
-                        vals[pretty] = ((value / ref - 1) * 100 if effect == "change"
-                                        else (ref - value) / ref * 100)
-                if vals:
-                    series.append((config_labels[cfg], vals))
-            plot_effect_chart(filename, title, ylabel, trace_labels, series,
-                              [config_colors[cfg] for cfg in comparators])
-            plotted.append(filename[:-4])
+    print(f"Saved {len(plotted)} plot pairs (PNG and PDF) under "
+          f"{output_dir.relative_to(ROOT)}")
 
-    elif task == "task2a":
-        for filename, title, ylabel, metric, effect in [
-            ("ipc_change_vs_rrip_pct", "IPC Change vs RRIP", "IPC change vs RRIP (%)", "ipc", "change"),
-            ("l2i_mpki_reduction_vs_rrip_pct", "L2 Instruction MPKI Reduction vs RRIP",
-             "L2 instruction load-MPKI reduction (%)", "l2i_load_mpki", "reduction"),
-        ]:
-            vals = {}
-            for trace, pretty in zip(traces, trace_labels):
-                ref = value_by_config_trace("rrip", metric, trace)
-                value = value_by_config_trace("irrip", metric, trace)
-                if ref not in (None, 0) and value is not None:
-                    vals[pretty] = ((value / ref - 1) * 100 if effect == "change"
-                                    else (ref - value) / ref * 100)
-            plot_effect_chart(filename, title, ylabel, trace_labels,
-                              [("I-RRIP vs RRIP", vals)], [config_colors["irrip"]])
-            plotted.append(filename[:-4])
-
-    elif task == "task2b":
-        dynamic = [row for row in rows if row.get("configuration") == "dynamic_irrip"
-                   and row.get("threshold") not in (None, "")]
-        thresholds = sorted({float(row["threshold"]) for row in dynamic})
-        threshold_categories = [f"{value:.2f}" for value in thresholds]
-        for filename, title, ylabel, metric, effect in [
-            ("ipc_change_vs_rrip_by_threshold_pct", "Dynamic I-RRIP IPC Change vs RRIP",
-             "IPC change vs RRIP (%)", "ipc", "change"),
-            ("l2i_mpki_reduction_vs_rrip_by_threshold_pct", "Dynamic I-RRIP Instruction-MPKI Reduction vs RRIP",
-             "L2 instruction load-MPKI reduction (%)", "l2i_load_mpki", "reduction"),
-        ]:
-            series = []
-            for trace in traces:
-                vals = {}
-                ref = value_by_config_trace("rrip", metric, trace)
-                for row in dynamic:
-                    if row["trace"] != trace:
-                        continue
-                    value = get_number(row, metric)
-                    if ref not in (None, 0) and value is not None:
-                        category = f"{float(row['threshold']):.2f}"
-                        vals[category] = ((value / ref - 1) * 100 if effect == "change"
-                                          else (ref - value) / ref * 100)
-                if vals:
-                    series.append((trace_labels[traces.index(trace)], vals))
-            plot_effect_chart(filename, title, ylabel, threshold_categories, series,
-                              threshold_colors, label_values=False)
-            plotted.append(filename[:-4])
-
-    elif task == "task3":
-        # Assignment objective: verify whether combining SPP and Dynamic I-RRIP
-        # improves IPC against the no-prefetch baseline and against the best standalone method.
-        series = []
-        for cfg in ("spp", "dynamic_irrip", "combined"):
-            vals = {}
-            for trace, pretty in zip(traces, trace_labels):
-                ref = value_by_config_trace("baseline", "ipc", trace)
-                value = value_by_config_trace(cfg, "ipc", trace)
-                if ref not in (None, 0) and value is not None:
-                    vals[pretty] = (value / ref - 1) * 100
-            if vals:
-                series.append((config_labels[cfg], vals))
-        plot_effect_chart("ipc_change_vs_baseline_pct", "IPC Change vs No-Prefetch Baseline",
-                          "IPC change vs baseline (%)", trace_labels, series,
-                          [config_colors["spp"], config_colors["dynamic_irrip"], config_colors["combined"]])
-        plotted.append("ipc_change_vs_baseline_pct")
-
-        best_standalone_gains = {}
-        for trace, pretty in zip(traces, trace_labels):
-            spp = value_by_config_trace("spp", "ipc", trace)
-            dynamic = value_by_config_trace("dynamic_irrip", "ipc", trace)
-            combined = value_by_config_trace("combined", "ipc", trace)
-            if spp is not None and dynamic is not None and combined is not None:
-                best = max(spp, dynamic)
-                if best != 0:
-                    best_standalone_gains[pretty] = (combined / best - 1) * 100
-        plot_effect_chart(
-            "ipc_gain_vs_best_standalone_pct",
-            "Combined Policy IPC Gain vs Best Standalone (SPP or Dynamic I-RRIP)",
-            "Combined IPC change vs best standalone (%)", trace_labels,
-            [("Combined vs best standalone", best_standalone_gains)], [config_colors["combined"]],
-        )
-        plotted.append("ipc_gain_vs_best_standalone_pct")
-
-    print(f"Saved {len(plotted)} PNG plot(s) under {output_dir.relative_to(ROOT)}")
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("list", "run", "plot", "all", "reparse"))
     parser.add_argument("--task", choices=tuple(TASK_EXPERIMENTS), default="task1b")
-    parser.add_argument("--stage", choices=tuple(EXPERIMENTS), default=None,
-                        help="Run only one configuration in the selected task; omitted means run all stages")
     parser.add_argument("--traces", default="all", help="all or comma-separated filenames/paths")
     parser.add_argument("--traces-dir", type=Path, default=None,
                         help="trace directory (default: ../traces, or ./traces)")
@@ -1136,8 +612,9 @@ def main() -> int:
     parser.add_argument("--fixed-threshold", type=threshold_value,
                         default=DEFAULT_FIXED_THRESHOLD,
                         help="Task 3 threshold, shared by dynamic and combined configurations")
-    parser.add_argument("--combined-replacement", default="prefetch_irrip",
-                        help="Task 3 combined L2 policy (default: prefetch_irrip)")
+    parser.add_argument("--combined-replacement", default="dyn_irrip",
+                        help="Task 3 combined L2 policy (default: dyn_irrip as specified in PA2; "
+                             "use prefetch_irrip only if that separate policy builds)")
     parser.add_argument("--resume", action="store_true",
                         help="Reuse existing simulation logs with a parsed IPC; "
                              "use only when the underlying C++ implementations have not changed")
@@ -1150,7 +627,7 @@ def main() -> int:
             parser.error("--combined-replacement must be a replacement policy filename stem")
         description = (
             "SPP + prefetch-aware Dynamic I-RRIP"
-            if name == "prefetch_irrip" else f"SPP + {name}"
+            if name == "dyn_irrip" else f"SPP + {name}"
         )
         EXPERIMENTS["combined"] = Experiment("combined", "spp", name, description)
 
@@ -1166,29 +643,14 @@ def main() -> int:
         reparse_task(args.task)
         return 0
 
-    if args.stage is not None and args.command not in ("run", "all"):
-        parser.error("--stage can only be used with the 'run' or 'all' command")
-    if args.stage is not None and args.stage not in TASK_EXPERIMENTS[args.task]:
-        parser.error(
-            f"stage '{args.stage}' is not valid for {args.task}; "
-            f"choose from: {', '.join(TASK_EXPERIMENTS[args.task])}"
-        )
-
-    plots_written = False
     if args.command in ("run", "all"):
         traces = find_traces(args.traces, args.traces_dir)
         thresholds = parse_thresholds(args.thresholds) if args.task == "task2b" else []
         rows = run_task(args.task, traces, args.warmup, args.simulation,
                         thresholds, args.fixed_threshold, args.debug,
-                        resume=args.resume, stage=args.stage)
-        if args.stage is not None:
-            rows = merge_task_rows(args.task, rows)
+                        resume=args.resume)
         write_task_data(args.task, rows)
-        # A targeted rerun refreshes charts from the merged, complete task dataset.
-        if args.stage is not None:
-            plot_task(args.task)
-            plots_written = True
-    if args.command in ("plot", "all") and not plots_written:
+    if args.command in ("plot", "all"):
         plot_task(args.task)
     return 0
 
