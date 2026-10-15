@@ -7,7 +7,7 @@
 #define RESET_INTERVAL 4096
 
 uint32_t l2_rrpv[L2C_SET][L2C_WAY];
-uint8_t prefetched[L2C_SET][L2C_WAY];
+static uint8_t prefetched[L2C_SET][L2C_WAY];
 
 uint64_t instr_accesses = 0;
 uint64_t instr_misses = 0;
