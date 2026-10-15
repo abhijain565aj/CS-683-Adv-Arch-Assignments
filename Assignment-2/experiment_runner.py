@@ -46,7 +46,7 @@ EXPERIMENTS = {
         "dynamic_irrip", "no", "dyn_irrip", "No prefetching + Dynamic I-RRIP"
     ),
     "combined": Experiment(
-        "combined", "spp", "dyn_irrip", "SPP + prefetch-aware Dynamic I-RRIP"
+        "combined", "spp", "prefetch_irrip", "SPP + prefetch-aware Dynamic I-RRIP"
     ),
 }
 
@@ -80,7 +80,7 @@ CSV_FIELDS = {
                "l2i_load_mpki", "l2d_load_mpki"],
     "task2b": ["trace", "configuration", "threshold", "ipc", "speedup",
                "l2c_load_mpki", "l2i_load_mpki", "l2d_load_mpki"],
-    "task3": ["trace", "configuration", "threshold", "ipc", "speedup",
+    "task3": ["trace", "configuration", "l1d_prefetcher", "l2_replacement", "threshold", "ipc", "speedup",
               "prefetch_accuracy_pct", "l1d_coverage_pct", "l1d_load_mpki",
               "l2c_load_mpki", "l2i_load_mpki", "l2d_load_mpki"],
 }
@@ -324,6 +324,8 @@ def reuse_completed_run(experiment: Experiment, task: str, trace: Path,
         "trace": trace.name,
         "configuration": experiment.name,
         "description": experiment.description,
+        "l1d_prefetcher": experiment.prefetcher,
+        "l2_replacement": experiment.replacement,
         "threshold": threshold,
         "warmup_instructions": warmup,
         "simulation_instructions": simulation,
@@ -358,6 +360,8 @@ def run_one(experiment: Experiment, binary: Path, task: str, trace: Path,
         "trace": trace.name,
         "configuration": experiment.name,
         "description": experiment.description,
+        "l1d_prefetcher": experiment.prefetcher,
+        "l2_replacement": experiment.replacement,
         "threshold": threshold,
         "warmup_instructions": warmup,
         "simulation_instructions": simulation,
@@ -490,6 +494,7 @@ def reparse_task(task: str) -> None:
         # Remove stale parser outputs but keep configuration and run metadata.
         for key in list(row):
             if key not in {"trace", "configuration", "description", "threshold",
+                           "l1d_prefetcher", "l2_replacement",
                            "warmup_instructions", "simulation_instructions", "log"}:
                 del row[key]
         metrics = parse_output(output, int(row["simulation_instructions"]))
@@ -607,7 +612,7 @@ def main() -> int:
     parser.add_argument("--fixed-threshold", type=threshold_value,
                         default=DEFAULT_FIXED_THRESHOLD,
                         help="Task 3 threshold, shared by dynamic and combined configurations")
-    parser.add_argument("--combined-replacement", default="dyn_irrip",
+    parser.add_argument("--combined-replacement", default="prefetch_irrip",
                         help="Task 3 combined L2 policy (default: dyn_irrip as specified in PA2; "
                              "use prefetch_irrip only if that separate policy builds)")
     parser.add_argument("--resume", action="store_true",
@@ -620,9 +625,11 @@ def main() -> int:
         name = args.combined_replacement
         if not re.fullmatch(r"[A-Za-z0-9_]+", name):
             parser.error("--combined-replacement must be a replacement policy filename stem")
-        EXPERIMENTS["combined"] = Experiment(
-            "combined", "spp", name, "SPP + prefetch-aware Dynamic I-RRIP"
+        description = (
+            "SPP + prefetch-aware Dynamic I-RRIP"
+            if name == "prefetch_irrip" else f"SPP + {name}"
         )
+        EXPERIMENTS["combined"] = Experiment("combined", "spp", name, description)
 
     if args.command == "list":
         for task, names in TASK_EXPERIMENTS.items():
