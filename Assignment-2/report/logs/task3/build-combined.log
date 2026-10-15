@@ -1,9 +1,6 @@
 Building single-core ChampSim...
 
-make[1]: Entering directory '/workspace/Assignment-2'
 rm -f -r obj
-make[1]: Leaving directory '/workspace/Assignment-2'
-make[1]: Entering directory '/workspace/Assignment-2'
 Generating dependencies for src/main.cc...
 Compiling src/main.cc...
 In file included from /usr/include/getopt.h:24:0,
@@ -109,7 +106,6 @@ Compiling prefetcher/llc_prefetcher.cc...
 Generating dependencies for prefetcher/itlb_prefetcher.cc...
 Compiling prefetcher/itlb_prefetcher.cc...
 Linking bin/champsim...
-make[1]: Leaving directory '/workspace/Assignment-2'
 
 ChampSim is successfully built
 Branch Predictor: hashed_perceptron
@@ -123,11 +119,11 @@ STLB Prefetcher: no
 BTB Replacement: lru
 L1I Replacement: lru
 L1D Replacement: lru
-L2C Replacement: dyn_irrip
+L2C Replacement: prefetch_irrip
 LLC Replacement: lru
 ITLB Replacement: lru
 DTLB Replacement: lru
 STLB Replacement: lru
 Cores: 1
-Binary: bin/hashed_perceptron-no-spp-no-no-no-no-no-lru-lru-lru-dyn_irrip-lru-lru-lru-lru-1core-runner-combined
+Binary: bin/hashed_perceptron-no-spp-no-no-no-no-no-lru-lru-lru-prefetch_irrip-lru-lru-lru-lru-1core-runner-combined
 
