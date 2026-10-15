@@ -25,6 +25,8 @@ DEFAULT_WARMUP = 25_000_000
 DEFAULT_SIMULATION = 25_000_000
 DEFAULT_THRESHOLDS = "0.10,0.20,0.25,0.30,0.40"
 DEFAULT_FIXED_THRESHOLD = 0.25
+TITLE_COLOR = "\033[1;36m"
+COLOR_RESET = "\033[0m"
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,10 @@ class Experiment:
     prefetcher: str
     replacement: str
     description: str
+
+
+def print_title(message: str) -> None:
+    print(f"{TITLE_COLOR}{message}{COLOR_RESET}", flush=True)
 
 
 # Names here must match the filenames in prefetcher/ and replacement/.
@@ -281,7 +287,7 @@ def execute(command: list[str], log_path: Path, env: Optional[dict] = None,
 def build_experiment(experiment: Experiment, task: str, debug: bool) -> Path:
     verify_sources(experiment)
     binary_name = f"runner-{experiment.name}"
-    print(f"\nBuilding {experiment.name}: {experiment.description}", flush=True)
+    print_title(f"\nBuilding {experiment.name}: {experiment.description}")
     execute(
         ["bash", str(ROOT / "build_champsim.sh"),
          experiment.prefetcher, experiment.replacement, binary_name],
@@ -308,8 +314,8 @@ def run_one(experiment: Experiment, binary: Path, task: str, trace: Path,
     if threshold is not None:
         env["CHAMPSIM_THRESHOLD"] = str(threshold)
 
-    print(f"\nRunning {task}: {experiment.name} | {trace.name}"
-          f" | threshold={threshold if threshold is not None else '-'}", flush=True)
+    print_title(f"\nRunning {task}: {experiment.name} | {trace.name}"
+                f" | threshold={threshold if threshold is not None else '-'}")
     output = execute(
         [str(binary), "-warmup_instructions", str(warmup),
          "-simulation_instructions", str(simulation), "-traces", str(trace)],
