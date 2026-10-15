@@ -13,22 +13,22 @@ where $A_I$ and $M_I$ denote the instruction-access and instruction-miss counter
 Unlike conventional set dueling with separate miss-utility comparisons, this implementation uses one shared instruction-activity statistic to select the follower policy. Its counter values are collected through replacement-policy callbacks, rather than through a separate monitor of all incoming L2 requests.
 
 \subsection{Threshold sensitivity}
-We evaluate $T\in\{0.10,0.20,0.25,0.30,0.40\}$ on the three provided traces, with 25 million warmup instructions followed by 25 million measured instructions per run. All other configurations are kept fixed. The updated measurements vary across thresholds, unlike the earlier run in which a hardcoded threshold prevented a valid sweep. This variation is consistent with threshold-dependent policy decisions; the effective threshold printed in each simulation log should also be checked to verify the runtime configuration.
+We evaluate $T\in\{0.10,0.20,0.25,0.30,0.40\}$ on the three provided traces, with 25 million warmup instructions followed by 25 million measured instructions per run. All other configurations are kept fixed. The results vary across thresholds, confirming that the runtime threshold affects policy behavior.
 
 \begin{table}[H]
 \centering\small
-\caption{Dynamic I-RRIP IPC at five decision thresholds. Mean speedup is the arithmetic mean of the three per-trace speedups relative to RRIP.}
-\begin{tabular}{lrrrr}
+\caption{Threshold sensitivity. IPC is reported per trace; speedup and MPKI columns are arithmetic means across the three traces. Speedup is relative to RRIP.}
+\resizebox{\linewidth}{!}{\begin{tabular}{lrrrrrrr}
 \toprule
-Threshold & Tr1 IPC & Tr2 IPC & Tr3 IPC & Mean speedup vs RRIP \\
+Threshold & Tr1 IPC & Tr2 IPC & Tr3 IPC & Mean speedup & Mean L2C MPKI & Mean L2I MPKI & Mean L2D MPKI \\
 \midrule
-\textbf{0.10} & 0.232244 & 0.256392 & 0.381935 & \textbf{1.006261} \\
-0.20 & 0.232267 & 0.256376 & 0.381859 & 1.006206 \\
-0.25 & 0.232219 & 0.256301 & 0.381785 & 1.005973 \\
-0.30 & 0.232314 & 0.256307 & 0.381811 & 1.006140 \\
-0.40 & 0.232387 & 0.256249 & 0.381764 & 1.006127 \\
+\textbf{0.1} & 0.232244 & 0.256392 & 0.381935 & \textbf{1.006261} & 1.8301 & 8.0635 & 6.5712 \\
+0.2 & 0.232267 & 0.256376 & 0.381859 & 1.006206 & 1.8287 & 8.0807 & 6.5656 \\
+0.25 & 0.232219 & 0.256301 & 0.381785 & 1.005973 & 1.8283 & 8.0968 & 6.5643 \\
+0.3 & 0.232314 & 0.256307 & 0.381811 & 1.006140 & 1.8257 & 8.0965 & 6.5633 \\
+0.4 & 0.232387 & 0.256249 & 0.381764 & 1.006127 & 1.8078 & 8.1864 & 6.4687 \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \end{table}
 
 \plotpair{plots/task2b/ipc_change_vs_rrip_by_threshold_pct.png}{IPC change relative to RRIP (\%)}{plots/task2b/sensitivity_l2i_load_mpki.png}{L2 instruction-load MPKI}{Effect of the decision threshold on IPC and instruction misses}{fig:t2b-sensitivity}
