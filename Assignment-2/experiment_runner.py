@@ -81,9 +81,9 @@ CSV_FIELDS = {
                "l2i_load_mpki", "l2d_load_mpki"],
     "task2b": ["trace", "configuration", "threshold", "ipc", "speedup",
                "l2c_load_mpki", "l2i_load_mpki", "l2d_load_mpki"],
-    "task3": ["trace", "configuration", "l1d_prefetcher", "l2_replacement", "threshold", "ipc", "speedup",
-              "prefetch_accuracy_pct", "l1d_coverage_pct", "l1d_load_mpki",
-              "l2c_load_mpki", "l2i_load_mpki", "l2d_load_mpki"],
+    "task3": ["trace", "configuration", "l1d_prefetcher", "l2_replacement", "threshold",
+              "ipc", "speedup", "prefetch_accuracy_pct", "l1d_coverage_pct",
+              "l1d_load_mpki", "l2c_load_mpki", "l2i_load_mpki", "l2d_load_mpki"],
 }
 
 # A no-prefetch configuration has no meaningful prefetch accuracy.
@@ -448,9 +448,16 @@ def write_task_data(task: str, rows: list[dict]) -> None:
 
 def run_task(task: str, traces: list[Path], warmup: int, simulation: int,
              thresholds: list[float], fixed_threshold: float, debug: bool,
-             resume: bool = False) -> list[dict]:
+             resume: bool = False, stage: Optional[str] = None) -> list[dict]:
+    """Run every task configuration, or just one named configuration via --stage."""
+    task_stages = TASK_EXPERIMENTS[task]
+    if stage is not None and stage not in task_stages:
+        valid = ", ".join(task_stages)
+        raise ValueError(f"Stage '{stage}' is not part of {task}. Valid stages: {valid}")
+
+    selected_stages = (stage,) if stage is not None else task_stages
     rows = []
-    for name in TASK_EXPERIMENTS[task]:
+    for name in selected_stages:
         experiment = EXPERIMENTS[name]
         if task == "task2b" and name == "dynamic_irrip":
             selected_thresholds = thresholds
@@ -479,6 +486,68 @@ def run_task(task: str, traces: list[Path], warmup: int, simulation: int,
 
 
 
+def _row_key(row: dict, task: str) -> tuple[str, str, Optional[str]]:
+    """Stable identity for one trace/configuration and (for Task 2B) threshold."""
+    # Task 2B intentionally stores multiple threshold runs for each trace. Task 3
+    # uses one selected fixed threshold per configuration, so a targeted rerun at
+    # a new fixed threshold should replace that configuration's previous row.
+    threshold = row.get("threshold") if task == "task2b" else None
+    if threshold in (None, ""):
+        threshold_key = None
+    else:
+        try:
+            threshold_key = f"{float(threshold):.12g}"
+        except (TypeError, ValueError):
+            threshold_key = str(threshold)
+    return (str(row.get("trace", "")), str(row.get("configuration", "")), threshold_key)
+
+
+def _load_existing_task_rows(task: str) -> list[dict]:
+    """Load existing JSON results; fall back to CSV if JSON is absent."""
+    raw_path = DATA_DIR / f"{task}_raw.json"
+    if raw_path.is_file():
+        loaded = json.loads(raw_path.read_text())
+        if not isinstance(loaded, list):
+            raise RuntimeError(f"Expected a list of result rows in {raw_path}")
+        return loaded
+
+    csv_path = CSV_PATHS[task]
+    if not csv_path.is_file():
+        return []
+    with csv_path.open(newline="") as handle:
+        loaded = list(csv.DictReader(handle))
+    numeric_fields = set(CSV_FIELDS[task]) - {"trace", "configuration", "l1d_prefetcher", "l2_replacement"}
+    for row in loaded:
+        for field in numeric_fields:
+            value = row.get(field)
+            if value in (None, ""):
+                row[field] = None
+                continue
+            try:
+                row[field] = float(value)
+            except (TypeError, ValueError):
+                pass
+        if row.get("threshold") is None:
+            row["threshold"] = None
+    return loaded
+
+
+def merge_task_rows(task: str, new_rows: list[dict]) -> list[dict]:
+    """Merge targeted reruns into saved results, replacing only matching row keys."""
+    merged = _load_existing_task_rows(task)
+    positions = {_row_key(row, task): index for index, row in enumerate(merged)}
+    for row in new_rows:
+        key = _row_key(row, task)
+        if key in positions:
+            merged[positions[key]] = row
+        else:
+            positions[key] = len(merged)
+            merged.append(row)
+    # Derive speedup/coverage after merging so they can use the preserved baseline row.
+    add_derived_metrics(merged, task)
+    return merged
+
+
 def reparse_task(task: str) -> None:
     """Rebuild CSV/plots from saved ChampSim logs without another simulation."""
     raw_path = DATA_DIR / f"{task}_raw.json"
@@ -494,9 +563,9 @@ def reparse_task(task: str) -> None:
         output = log_path.read_text(errors="replace")
         # Remove stale parser outputs but keep configuration and run metadata.
         for key in list(row):
-            if key not in {"trace", "configuration", "description", "threshold",
-                           "l1d_prefetcher", "l2_replacement",
-                           "warmup_instructions", "simulation_instructions", "log"}:
+            if key not in {"trace", "configuration", "description", "l1d_prefetcher",
+                           "l2_replacement", "threshold", "warmup_instructions",
+                           "simulation_instructions", "log"}:
                 del row[key]
         metrics = parse_output(output, int(row["simulation_instructions"]))
         if "ipc" not in metrics:
@@ -1055,6 +1124,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("list", "run", "plot", "all", "reparse"))
     parser.add_argument("--task", choices=tuple(TASK_EXPERIMENTS), default="task1b")
+    parser.add_argument("--stage", choices=tuple(EXPERIMENTS), default=None,
+                        help="Run only one configuration in the selected task; omitted means run all stages")
     parser.add_argument("--traces", default="all", help="all or comma-separated filenames/paths")
     parser.add_argument("--traces-dir", type=Path, default=None,
                         help="trace directory (default: ../traces, or ./traces)")
@@ -1066,8 +1137,7 @@ def main() -> int:
                         default=DEFAULT_FIXED_THRESHOLD,
                         help="Task 3 threshold, shared by dynamic and combined configurations")
     parser.add_argument("--combined-replacement", default="prefetch_irrip",
-                        help="Task 3 combined L2 policy (default: dyn_irrip as specified in PA2; "
-                             "use prefetch_irrip only if that separate policy builds)")
+                        help="Task 3 combined L2 policy (default: prefetch_irrip)")
     parser.add_argument("--resume", action="store_true",
                         help="Reuse existing simulation logs with a parsed IPC; "
                              "use only when the underlying C++ implementations have not changed")
@@ -1096,14 +1166,29 @@ def main() -> int:
         reparse_task(args.task)
         return 0
 
+    if args.stage is not None and args.command not in ("run", "all"):
+        parser.error("--stage can only be used with the 'run' or 'all' command")
+    if args.stage is not None and args.stage not in TASK_EXPERIMENTS[args.task]:
+        parser.error(
+            f"stage '{args.stage}' is not valid for {args.task}; "
+            f"choose from: {', '.join(TASK_EXPERIMENTS[args.task])}"
+        )
+
+    plots_written = False
     if args.command in ("run", "all"):
         traces = find_traces(args.traces, args.traces_dir)
         thresholds = parse_thresholds(args.thresholds) if args.task == "task2b" else []
         rows = run_task(args.task, traces, args.warmup, args.simulation,
                         thresholds, args.fixed_threshold, args.debug,
-                        resume=args.resume)
+                        resume=args.resume, stage=args.stage)
+        if args.stage is not None:
+            rows = merge_task_rows(args.task, rows)
         write_task_data(args.task, rows)
-    if args.command in ("plot", "all"):
+        # A targeted rerun refreshes charts from the merged, complete task dataset.
+        if args.stage is not None:
+            plot_task(args.task)
+            plots_written = True
+    if args.command in ("plot", "all") and not plots_written:
         plot_task(args.task)
     return 0
 
