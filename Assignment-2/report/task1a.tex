@@ -1,41 +1,26 @@
-% ============================================================
-% TASK 1A: Understanding the provided IP-stride prefetcher
-% ============================================================
-% TODO Task 1A: complete the IP-stride implementation walkthrough and analysis.
 \section{Task 1A: Understanding the IP-Stride Prefetcher}
+\label{sec:task1a}
+\subsection{State and lookup}
+The supplied \texttt{prefetcher/}\allowbreak\texttt{ip\_stride.l1d\_pref} implementation defines \texttt{IP\_TRACKER\_COUNT=24}, \texttt{PREFETCH\_DEGREE=3}, and \texttt{MASK\_IP=0xFF}. Each tracker contains \texttt{ip}, \texttt{last\_cl\_addr}, \texttt{last\_stride}, and an LRU rank. The IP is masked to its lower eight bits before lookup, so instruction pointers that differ only above those bits alias to the same logical IP. The implementation does not use a valid bit in its tracker structure.
 
-\subsection{Purpose and Scope}
-The assignment asks us to read and understand the supplied IP-stride prefetcher implementation at \texttt{prefetcher/ip\_stride.l1d\_pref}. Document the behavior of the provided code rather than presenting a generic description alone.
+On an IP miss, it chooses the tracker whose LRU rank is 23, stores the masked IP and current cache-line address, resets the previous stride to zero, updates LRU ranks, and returns without prefetching. On a hit, it calculates a signed stride in cache-line units as current block address minus the previous block address. A zero stride returns immediately. Otherwise, prefetches are issued only when the current stride equals the previously recorded stride. This is a two-consecutive-equal-strides test rather than a saturating confidence counter.
 
-\subsection{Code Walkthrough}
-\begin{itemize}
-    \item \textbf{Per-IP state:} \TODO{Identify the table/entry fields used to track instruction pointers, last address, stride, confidence, or equivalent state. Use names from the supplied source.}
-    \item \textbf{Training/update:} \TODO{Describe exactly when an entry is allocated or updated and how a stride is calculated.}
-    \item \textbf{Prediction rule:} \TODO{Describe the conditions under which a prefetch is issued and how the target address is computed.}
-    \item \textbf{Confidence/state transitions:} \TODO{Explain the actual confidence mechanism and what happens when an observed stride changes.}
-    \item \textbf{Safety checks:} \TODO{Describe page-boundary checks, address checks, and degree/distance limits present in the code.}
-    \item \textbf{Reported statistics:} \TODO{Identify relevant counters and their definitions in this repository version.}
-\end{itemize}
+\subsection{Prefetch generation and safety}
+The next three block addresses are computed as $A + k\Delta$, for $k=1,2,3$, and converted to byte addresses by shifting by \texttt{LOG2\_BLOCK\_SIZE}. A candidate is discarded, and the loop stops, if it is outside the same 4 KiB page as the current demand access. If MSHR occupancy is below half of MSHR capacity, the prefetch is requested to fill L1; otherwise it is requested to fill L2. The final-statistics callback prints the fixed degree but does not report useful/issued totals.
 
-\subsection{Control Flow / State Diagram}
-\begin{figure}[H]\centering
-\evidencebox[4.5cm]{\TODO{Insert a flowchart showing lookup by IP, state update, confidence decision, target generation, page-boundary validation, and prefetch issue.}}
-\caption{Control flow of the supplied IP-stride prefetcher.}\label{fig:ip_stride_flow}
-\end{figure}
-
-\subsection{Example Walkthrough}
-\TODO{Walk through a short address sequence for one IP. Show the observed deltas, internal state after each access, and whether a prefetch is issued. Use an example consistent with the implementation.}
-\begin{table}[H]\centering
-\caption{Example per-access state evolution (fill using the code's actual fields).}
-\begin{tabular}{ccccc}
-\toprule Access index & Address / block & Observed stride & State / confidence & Prefetch action \\
+\subsection{Example state evolution}
+The following example uses cache-block numbers (not byte addresses) and assumes every address remains in the same page.
+\begin{table}[H]\centering\small
+\caption{Example for one masked IP and block sequence 100, 102, 104, 106.}
+\begin{tabularx}{\linewidth}{c c c X X}
+\toprule Access & Block & Observed stride & Stored state after access & Prefetch action \\
 \midrule
-1 & \TODO{value} & -- & \TODO{state} & \TODO{action} \\
-2 & \TODO{value} & \TODO{value} & \TODO{state} & \TODO{action} \\
-3 & \TODO{value} & \TODO{value} & \TODO{state} & \TODO{action} \\
-4 & \TODO{value} & \TODO{value} & \TODO{state} & \TODO{action} \\
+1 & 100 & -- & Last block = 100; last stride = 0 & Allocate tracker; none \\
+2 & 102 & $+2$ & Last block = 102; last stride = $+2$ & No: previous stride was 0 \\
+3 & 104 & $+2$ & Last block = 104; last stride = $+2$ & Yes: blocks 106, 108, 110 \\
+4 & 106 & $+2$ & Last block = 106; last stride = $+2$ & Yes: blocks 108, 110, 112 \\
 \bottomrule
-\end{tabular}\end{table}
+\end{tabularx}\end{table}
 
-\subsection{Understanding and Observations}
-\TODO{Explain the strengths and limitations of a constant-stride predictor for repeating non-uniform patterns. Tie the explanation to the supplied implementation and the SPP design in Task 1B.}
+\subsection{Strengths and limitations}
+The design is simple and inexpensive, and it can issue multiple requests as soon as a constant stride repeats. It does not encode a multi-stride signature, however, so a repeating sequence such as $+1,+2,+2,+2,+3$ is not modeled as a cycle. It may fail to prefetch across a page boundary even if the stream continues contiguously, and it can lose history when a tracker is evicted. Because tracker IPs are masked and there is no valid bit, a masked IP equal to zero can also match an initially zero-initialized tracker. These limitations motivate the extra history and signature state in Task 1B.
