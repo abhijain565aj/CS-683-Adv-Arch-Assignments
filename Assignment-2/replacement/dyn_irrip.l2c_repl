@@ -1,82 +1,103 @@
-
 #include "cache.h"
 
-#include <cstdlib>
 #include <cerrno>
 #include <cmath>
+#include <cstdlib>
 
 #define maxRRPV 3
 #define RESET_INTERVAL 4096
 
+// These belong only to the L2 replacement policy. Internal linkage prevents
+// name collisions with metadata in the SPP prefetcher.
+namespace {
 uint32_t l2_rrpv[L2C_SET][L2C_WAY];
+uint8_t l2_prefetched[L2C_SET][L2C_WAY];
 
 uint64_t instr_accesses = 0;
 uint64_t instr_misses = 0;
 uint64_t total_accesses = 0;
 uint64_t total_misses = 0;
 
-double threshold = 0.25;
+uint64_t useful_prefetches = 0;
+uint64_t unused_prefetches = 0;
+
 bool use_irrip = false;
+double threshold = 0.25;
+
+bool is_follower(uint32_t set)
+{
+    return set % 32 >= 2;
+}
+
+bool use_instruction_rrip(uint32_t set)
+{
+    if (set % 32 == 0)
+        return false;  // Always RRIP: fixed leader group.
+    if (set % 32 == 1)
+        return true;   // Always I-RRIP: fixed leader group.
+    return use_irrip;  // Follower: select based on leader statistics.
+}
+} // namespace
 
 void CACHE::l2c_initialize_replacement()
 {
     threshold = 0.25;
-
     const char *value = std::getenv("CHAMPSIM_THRESHOLD");
-
     if (value != nullptr) {
         char *end = nullptr;
         errno = 0;
-
         double parsed = std::strtod(value, &end);
-
-        if (end != value && *end == '\0' &&
-            errno != ERANGE && std::isfinite(parsed) &&
-            parsed >= 0.0 && parsed <= 1.0) {
+        if (end != value && *end == '\0' && errno != ERANGE &&
+            std::isfinite(parsed) && parsed >= 0.0 && parsed <= 1.0) {
             threshold = parsed;
-        }
-        else {
-            cerr << "Invalid CHAMPSIM_THRESHOLD: "
-                 << value << ", using 0.25" << endl;
+        } else {
+            cerr << "Invalid CHAMPSIM_THRESHOLD: " << value
+                 << ", using 0.25" << endl;
         }
     }
 
-    cout << "Initialize Dynamic I-RRIP for L2C" << endl;
+    cout << "Initialize Prefetch-Aware Dynamic I-RRIP for L2C" << endl;
     cout << "Dynamic I-RRIP threshold: " << threshold << endl;
 
     instr_accesses = 0;
     instr_misses = 0;
     total_accesses = 0;
     total_misses = 0;
+    useful_prefetches = 0;
+    unused_prefetches = 0;
     use_irrip = false;
 
     for (int i = 0; i < L2C_SET; i++) {
         for (int j = 0; j < L2C_WAY; j++) {
             l2_rrpv[i][j] = maxRRPV;
+            l2_prefetched[i][j] = 0;
         }
     }
 }
 
-uint32_t CACHE::l2c_find_victim(
-    uint32_t cpu, uint64_t instr_id, uint32_t set,
-    const BLOCK *current_set, uint64_t ip,
-    uint64_t full_addr, uint32_t type)
+uint32_t CACHE::l2c_find_victim(uint32_t cpu, uint64_t instr_id,
+        uint32_t set, const BLOCK *current_set, uint64_t ip,
+        uint64_t full_addr, uint32_t type)
 {
-    bool irrip = false;
+    const bool irrip = use_instruction_rrip(set);
 
-    if (set % 32 == 1)
-        irrip = true;
-    else if (set % 32 != 0)
-        irrip = use_irrip;
-
-    // Prefer an empty way before replacing a valid line.
+    // Always occupy invalid ways before evicting a valid cache line.
     for (int i = 0; i < L2C_WAY; i++) {
         if (!current_set[i].valid)
             return i;
     }
 
-    while (1) {
-        // In I-RRIP mode, prefer evicting a data line.
+    while (true) {
+        // Only followers apply prefetch-aware eviction. Do not alter
+        // the RRIP or I-RRIP leader groups used to select the mode.
+        if (is_follower(set)) {
+            for (int i = 0; i < L2C_WAY; i++) {
+                if (l2_rrpv[set][i] == maxRRPV && l2_prefetched[set][i])
+                    return i;
+            }
+        }
+
+        // I-RRIP prefers an equally old data line over an instruction line.
         if (irrip) {
             for (int i = 0; i < L2C_WAY; i++) {
                 if (l2_rrpv[set][i] == maxRRPV &&
@@ -85,45 +106,38 @@ uint32_t CACHE::l2c_find_victim(
             }
         }
 
-        // Regular RRIP victim selection.
+        // Standard RRIP fallback when there is no preferred candidate.
         for (int i = 0; i < L2C_WAY; i++) {
             if (l2_rrpv[set][i] == maxRRPV)
                 return i;
         }
 
+        // If no line is old enough yet, age every way and repeat.
         for (int i = 0; i < L2C_WAY; i++)
             l2_rrpv[set][i]++;
     }
-
-    return 0;
 }
 
-void CACHE::l2c_update_replacement_state(
-    uint32_t cpu, uint32_t set, uint32_t way,
-    uint64_t full_addr, uint64_t ip, uint64_t victim_addr,
-    uint32_t type, uint8_t hit, uint8_t isInstruction)
+void CACHE::l2c_update_replacement_state(uint32_t cpu,
+        uint32_t set, uint32_t way, uint64_t full_addr,
+        uint64_t ip, uint64_t victim_addr, uint32_t type,
+        uint8_t hit, uint8_t isInstruction)
 {
-    // Leader sets determine the mode for follower sets.
-    // Do not count prefetches or writebacks as demand accesses.
-    if ((set % 32 == 0 || set % 32 == 1) &&
-        type != PREFETCH && type != WRITEBACK) {
-
+    // Keep Task 2B's leader-set decision statistic. Prefetch and
+    // writeback callbacks are not counted as demand instruction activity.
+    if (set % 32 < 2 && type != PREFETCH && type != WRITEBACK) {
         total_accesses++;
-
         if (isInstruction)
             instr_accesses++;
 
         if (!hit) {
             total_misses++;
-
             if (isInstruction)
                 instr_misses++;
         }
 
-        double ratio =
-            (double)(instr_accesses + instr_misses) /
-            (total_accesses + total_misses);
-
+        double ratio = (double)(instr_accesses + instr_misses) /
+                       (total_accesses + total_misses);
         use_irrip = (ratio >= threshold);
 
         if (total_accesses >= RESET_INTERVAL) {
@@ -134,37 +148,55 @@ void CACHE::l2c_update_replacement_state(
         }
     }
 
-    bool irrip = false;
+    const bool irrip = use_instruction_rrip(set);
+    const bool follower = is_follower(set);
 
-    if (set % 32 == 1)
-        irrip = true;
-    else if (set % 32 != 0)
-        irrip = use_irrip;
+    if (hit) {
+        if (follower) {
+            // Another prefetch request is not evidence of demand reuse.
+            if (type == PREFETCH)
+                return;
 
-    if (irrip) {
-        if (hit) {
-            if (isInstruction)
-                l2_rrpv[set][way] = 0;
-            else
-                l2_rrpv[set][way] = 1;
+            // A demand access to a prefetched line makes it useful.
+            // Clear the flag so it no longer receives eviction priority.
+            if (type != WRITEBACK && l2_prefetched[set][way]) {
+                useful_prefetches++;
+                l2_prefetched[set][way] = 0;
+            }
         }
-        else {
-            if (isInstruction)
-                l2_rrpv[set][way] = 1;
-            else
-                l2_rrpv[set][way] = maxRRPV - 1;
-        }
-    }
-    else {
-        if (hit)
-            l2_rrpv[set][way] = 0;
+
+        // Original RRIP / I-RRIP promotion remains unchanged.
+        if (irrip)
+            l2_rrpv[set][way] = isInstruction ? 0 : 1;
         else
+            l2_rrpv[set][way] = 0;
+    } else {
+        // Replacement is processed before the new line is filled. Count
+        // evictions of prefetched lines that were never used by demand.
+        if (follower && block[set][way].valid && l2_prefetched[set][way])
+            unused_prefetches++;
+        l2_prefetched[set][way] = 0;
+
+        if (follower && type == PREFETCH) {
+            // Prefetched lines are speculative: insert at the least
+            // protected RRPV, making unused lines cheap to evict.
+            l2_prefetched[set][way] = 1;
+            l2_rrpv[set][way] = maxRRPV;
+        } else if (irrip) {
+            // Keep stronger instruction protection for demand inserts.
+            l2_rrpv[set][way] = isInstruction ? 1 : maxRRPV - 1;
+        } else {
             l2_rrpv[set][way] = maxRRPV - 1;
+        }
     }
 }
 
 void CACHE::l2c_replacement_final_stats()
 {
+    cout << "L2C follower useful prefetched lines: "
+         << useful_prefetches << endl;
+    cout << "L2C follower unused prefetched lines replaced: "
+         << unused_prefetches << endl;
     cout << "Dynamic I-RRIP threshold: " << threshold << endl;
     cout << "Dynamic I-RRIP final mode: "
          << (use_irrip ? "I-RRIP" : "RRIP") << endl;
