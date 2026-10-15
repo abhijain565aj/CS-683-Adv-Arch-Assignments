@@ -1,53 +1,67 @@
 \section{Task 2B: Dynamic I-RRIP with Set Dueling}
 \label{sec:task2b}
-\subsection{Set selection and decision statistic}
-The supplied \texttt{dyn\_irrip.l2c\_repl} sets \texttt{maxRRPV=3}, uses \texttt{RESET\_INTERVAL=4096}, and defines the threshold as the compile-time constant \texttt{THRESHOLD 0.25}. For set index $s$, sets with $s\bmod32=0$ are RRIP leader sets, sets with $s\bmod32=1$ are I-RRIP leader sets, and all other sets use the global follower decision. The two leader classes together account for 2 of every 32 sets (6.25\% when the number of sets is divisible by 32), with each leader class representing 3.125\% of sets.
 
-The policy updates shared counters on accesses to either leader class and computes
+\subsection{Set selection and decision statistic}
+The Dynamic I-RRIP policy uses four RRPV states (0-3) and a counter reset interval of 4,096 accesses. For a set index $s$, sets with $s\bmod 32=0$ always use RRIP, sets with $s\bmod 32=1$ always use I-RRIP, and the remaining sets follow a shared dynamic decision. Thus, 2 out of every 32 sets are leader sets (6.25\% in total), while the remaining 93.75\% are followers.
+
+The policy tracks instruction and total accesses and misses from the leader sets and computes
 \[
 R=\frac{A_I+M_I}{A_{\mathrm{total}}+M_{\mathrm{total}}},
 \]
-where the \texttt{instr\_accesses}, \texttt{instr\_misses}, \texttt{total\_accesses}, and \texttt{total\_misses} counters implement these quantities. The ratio is recalculated after each leader-set callback and compared with 0.25; follower sets use I-RRIP when $R\geq0.25$ and RRIP otherwise. Once total accesses reach 4,096, the counters are reset after the ratio update. The source uses a single shared statistic rather than keeping independent utility counters for the two leader policies, so its decision is instruction-activity based rather than a direct comparison of measured miss cost between the two leader groups.
+where $A_I$ and $M_I$ denote the instruction-access and instruction-miss counters, respectively. Follower sets use I-RRIP when $R\geq T$ and RRIP otherwise, where $T$ is the selected threshold. The ratio is updated after each eligible leader-set replacement callback; the counters are reset after every 4,096 counted accesses. In the revised implementation, \texttt{CHAMPSIM\_THRESHOLD} supplies $T$ at runtime, with 0.25 as the default. The intended counting rule excludes prefetch and writeback callbacks from the decision statistic.
 
-\subsection{Threshold sensitivity: a source-level issue}
-The runner attempted thresholds 0.10, 0.20, 0.25, 0.30, and 0.40. The measured IPC values and cache metrics repeat exactly across those five rows. This is explained by the implementation: \texttt{dyn\_irrip.l2c\_repl} hardcodes \texttt{THRESHOLD 0.25} and never reads the \texttt{CHAMPSIM\_THRESHOLD} environment variable that the runner changes. Therefore these runs all use the same effective threshold and do \emph{not} constitute a valid threshold sensitivity experiment. The repeated table below preserves the observed results for reproducibility; it should not be used to claim that the policy is insensitive to threshold or that 0.25 is optimal.
+Unlike conventional set dueling with separate miss-utility comparisons, this implementation uses one shared instruction-activity statistic to select the follower policy. Its counter values are collected through replacement-policy callbacks, rather than through a separate monitor of all incoming L2 requests.
 
-\begin{table}[H]\centering\small
-\caption{Observed Dynamic I-RRIP IPC by requested threshold. The invariance is an artifact of the compile-time constant, not evidence from a working sweep.}
+\subsection{Threshold sensitivity}
+We evaluate $T\in\{0.10,0.20,0.25,0.30,0.40\}$ on the three provided traces, with 25 million warmup instructions followed by 25 million measured instructions per run. All other configurations are kept fixed. The updated measurements vary across thresholds, unlike the earlier run in which a hardcoded threshold prevented a valid sweep. This variation is consistent with threshold-dependent policy decisions; the effective threshold printed in each simulation log should also be checked to verify the runtime configuration.
+
+\begin{table}[H]
+\centering\small
+\caption{Dynamic I-RRIP IPC at five decision thresholds. Mean speedup is the arithmetic mean of the three per-trace speedups relative to RRIP.}
 \begin{tabular}{lrrrr}
-\toprule Requested threshold & Tr1 IPC & Tr2 IPC & Tr3 IPC & Mean speedup vs RRIP \\
+\toprule
+Threshold & Tr1 IPC & Tr2 IPC & Tr3 IPC & Mean speedup vs RRIP \\
 \midrule
-0.10 & 0.232281 & 0.256285 & 0.381742 & 1.006004 \\
-0.20 & 0.232281 & 0.256285 & 0.381742 & 1.006004 \\
-0.25 & 0.232281 & 0.256285 & 0.381742 & 1.006004 \\
-0.30 & 0.232281 & 0.256285 & 0.381742 & 1.006004 \\
-0.40 & 0.232281 & 0.256285 & 0.381742 & 1.006004 \\
-\bottomrule\end{tabular}\end{table}
-\plotpair{plots/task2b/sensitivity_ipc.png}{IPC by requested threshold}{plots/task2b/sensitivity_l2i_load_mpki.png}{L2 instruction MPKI by requested threshold}{Requested-threshold sweep; identical bars reflect the hardcoded threshold described above}{fig:t2b-sensitivity}
+\textbf{0.10} & 0.232244 & 0.256392 & 0.381935 & \textbf{1.006261} \\
+0.20 & 0.232267 & 0.256376 & 0.381859 & 1.006206 \\
+0.25 & 0.232219 & 0.256301 & 0.381785 & 1.005973 \\
+0.30 & 0.232314 & 0.256307 & 0.381811 & 1.006140 \\
+0.40 & 0.232387 & 0.256249 & 0.381764 & 1.006127 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsection{Measured policy comparison at effective threshold 0.25}
+\plotpair{plots/task2b/ipc_change_vs_rrip_by_threshold_pct.png}{IPC change relative to RRIP (\%)}{plots/task2b/sensitivity_l2i_load_mpki.png}{L2 instruction-load MPKI}{Effect of the decision threshold on IPC and instruction misses}{fig:t2b-sensitivity}
+\plotpair{plots/task2b/sensitivity_l2c_load_mpki.png}{L2C load MPKI}{plots/task2b/sensitivity_l2d_load_mpki.png}{L2 data-load MPKI}{L2 load-miss sensitivity across the five thresholds}{fig:t2b-sensitivity-load}
+
+The highest mean speedup among these five values occurs at $T=0.10$ (1.006261), but the differences between thresholds are small. Tr2 has the highest IPC at $T=0.10$, Tr3 also has its highest IPC at $T=0.10$, while Tr1 has its highest IPC at $T=0.40$. A lower threshold generally selects I-RRIP more readily, but the observed performance need not vary monotonically because decisions depend on the evolving instruction-access statistic. Consequently, $T=0.10$ is the best of the tested values by arithmetic mean speedup, not a universal optimum.
+
+\subsection{Measured policy comparison at threshold 0.25}
+For a direct comparison with RRIP and I-RRIP, we use $T=0.25$ as a fixed reference configuration. All speedups in the following table use RRIP on the same trace as the baseline.
+
 \begin{table}[H]\centering\scriptsize
-\caption{Task 2B results. Speedup is relative to RRIP on the same trace.}
+\caption{Task 2B results at reference threshold $T=0.25$. Speedup is relative to RRIP on the same trace.}
 \resizebox{\linewidth}{!}{\begin{tabular}{llrrrrr}
 \toprule Trace & Policy & IPC & Speedup & L2C Load MPKI & L2 Instruction MPKI & L2 Data MPKI \\
 \midrule
 Tr1.gz & RRIP baseline & 0.232231 & 1.000000 & 2.2021 & 10.5618 & 7.0769 \\
 Tr1.gz & I-RRIP & 0.232164 & 0.999711 & 2.4089 & 9.8916 & 7.7172 \\
-Tr1.gz & Dynamic I-RRIP (compiled threshold 0.25) & 0.232281 & 1.000215 & 2.3941 & 9.9094 & 7.6956 \\
+Tr1.gz & Dynamic I-RRIP ($T=0.25$) & 0.232219 & 0.999948 & 2.3960 & 9.9169 & 7.6925 \\
 Tr2.gz & RRIP baseline & 0.251806 & 1.000000 & 2.1711 & 17.7813 & 7.9645 \\
 Tr2.gz & I-RRIP & 0.256625 & 1.019138 & 2.3754 & 13.0364 & 9.1737 \\
-Tr2.gz & Dynamic I-RRIP (compiled threshold 0.25) & 0.256285 & 1.017788 & 2.3631 & 13.3453 & 9.1221 \\
+Tr2.gz & Dynamic I-RRIP ($T=0.25$) & 0.256301 & 1.017851 & 2.3619 & 13.2471 & 9.1218 \\
 Tr3.gz & RRIP baseline & 0.381739 & 1.000000 & 0.7090 & 1.1970 & 2.8424 \\
 Tr3.gz & I-RRIP & 0.381981 & 1.000634 & 0.7264 & 1.0221 & 2.8761 \\
-Tr3.gz & Dynamic I-RRIP (compiled threshold 0.25) & 0.381742 & 1.000008 & 0.7235 & 1.1464 & 2.8764 \\
+Tr3.gz & Dynamic I-RRIP ($T=0.25$) & 0.381785 & 1.000121 & 0.7269 & 1.1262 & 2.8785 \\
 \bottomrule\end{tabular}}
 \end{table}
-\plotpair{plots/task2b/ipc.png}{IPC}{plots/task2b/speedup.png}{Speedup}{Task 2B policy-level IPC and speedup}{fig:t2b-ipc-speedup}
-\plotpair{plots/task2b/l2c_load_mpki.png}{L2C load MPKI}{plots/task2b/l2i_load_mpki.png}{L2 instruction-load MPKI}{Task 2B aggregate and instruction MPKI}{fig:t2b-l2c-l2i}
-\plotpair{plots/task2b/l2d_load_mpki.png}{L2 data-load MPKI}{plots/task2b/ipc_change_vs_rrip_by_threshold_pct.png}{IPC change vs. RRIP (\%)}{Task 2B data-MPKI trade-off and relative IPC change}{fig:t2b-l2d-change}
-\plotone{plots/task2b/l2i_mpki_reduction_vs_rrip_by_threshold_pct.png}{Instruction-load MPKI reduction relative to RRIP for the dynamic policy at the reported threshold.}{fig:t2b-l2i-reduction}
 
-\subsection{Interpretation and required correction}
-At the measured effective threshold of 0.25, dynamic I-RRIP changes IPC by +0.0215\% on Tr1, +1.7788\% on Tr2, and approximately +0.0008\% on Tr3 relative to RRIP. L2 instruction MPKI declines on all three traces, while aggregate L2C and data MPKI rise. Tr2 is the clearest performance win in the supplied data; Tr1 and Tr3 are essentially neutral in IPC.
+\plotpair{plots/task2b/ipc.png}{IPC}{plots/task2b/speedup.png}{Speedup}{Task 2B comparison of RRIP, I-RRIP, and Dynamic I-RRIP at $T=0.25$}{fig:t2b-ipc-speedup}
+\plotpair{plots/task2b/l2c_load_mpki.png}{L2C load MPKI}{plots/task2b/l2i_load_mpki.png}{L2 instruction-load MPKI}{L2C and instruction-load MPKI at the reference threshold}{fig:t2b-l2c-l2i}
+\plotpair{plots/task2b/l2d_load_mpki.png}{L2 data-load MPKI}{plots/task2b/sensitivity_speedup.png}{Speedup across thresholds}{Data-miss trade-off at $T=0.25$ and speedup sensitivity}{fig:t2b-l2d-speedup}
+\plotone{plots/task2b/l2i_mpki_reduction_vs_rrip_by_threshold_pct.png}{L2 instruction-load MPKI reduction relative to RRIP across the five decision thresholds.}{fig:t2b-l2i-reduction}
 
-To complete the assignment's sensitivity requirement, replace the compile-time macro with a runtime parameter read from \texttt{CHAMPSIM\_THRESHOLD} (with a safe default and range check), rebuild for every threshold or ensure the runtime argument reaches the policy, and rerun all three traces at the five values. Keep leader-set placement and all other parameters fixed. Until those measurements exist, no threshold selection rationale can be inferred from this sweep.
+\subsection{Interpretation}
+At the reference threshold $T=0.25$, Dynamic I-RRIP changes IPC relative to RRIP by approximately $-0.0052\%$, $+1.7851\%$, and $+0.0121\%$ on Tr1, Tr2, and Tr3, respectively. The largest gain is therefore on Tr2. Instruction-load MPKI decreases by about 6.11\%, 25.50\%, and 5.91\% on the three traces. On the other hand, both data-load MPKI and the reported aggregate L2C load MPKI increase relative to RRIP on every trace at this threshold. This illustrates the trade-off between protecting instruction lines and retaining useful data lines.
+
+The threshold sweep shows that the effect of changing $T$ is workload-dependent. In particular, Tr1 reaches its highest IPC at 0.40, whereas Tr2 and Tr3 favor 0.10. The average IPC benefit changes only slightly over the tested range. Although 0.10 has the highest arithmetic mean speedup among the five tested values, this result alone does not establish a globally optimal threshold. Moreover, the dynamic policy at the 0.25 reference threshold does not outperform fixed I-RRIP on Tr2 or Tr3. The measurements therefore support a modest, trace-dependent benefit from adaptive selection rather than a uniform improvement.
