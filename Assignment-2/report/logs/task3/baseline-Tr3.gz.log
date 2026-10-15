@@ -18,14 +18,14 @@ L1D has LRU replacement policy
 L2C has LRU replacement policy
 LLC has LRU replacement policy
 Heartbeat CPU 0 instructions: 10000000 cycles: 3015744 heartbeat IPC: 3.31593 cumulative IPC: 3.31593 (Simulation time: 0 hr 0 min 15 sec) 
-Heartbeat CPU 0 instructions: 20000000 cycles: 6013862 heartbeat IPC: 3.33543 cumulative IPC: 3.32565 (Simulation time: 0 hr 0 min 30 sec) 
+Heartbeat CPU 0 instructions: 20000000 cycles: 6013862 heartbeat IPC: 3.33543 cumulative IPC: 3.32565 (Simulation time: 0 hr 0 min 29 sec) 
 
-Warmup complete CPU 0 instructions: 25000002 cycles: 7507265 (Simulation time: 0 hr 0 min 38 sec) 
+Warmup complete CPU 0 instructions: 25000002 cycles: 7507265 (Simulation time: 0 hr 0 min 36 sec) 
 
-Heartbeat CPU 0 instructions: 30000000 cycles: 22083649 heartbeat IPC: 0.622286 cumulative IPC: 0.34302 (Simulation time: 0 hr 0 min 50 sec) 
-Heartbeat CPU 0 instructions: 40000003 cycles: 48075219 heartbeat IPC: 0.38474 cumulative IPC: 0.36975 (Simulation time: 0 hr 1 min 12 sec) 
-Heartbeat CPU 0 instructions: 50000000 cycles: 72941238 heartbeat IPC: 0.402155 cumulative IPC: 0.382064 (Simulation time: 0 hr 1 min 34 sec) 
-Finished CPU 0 instructions: 25000001 cycles: 65433974 cumulative IPC: 0.382065 (Simulation time: 0 hr 1 min 34 sec) 
+Heartbeat CPU 0 instructions: 30000000 cycles: 22083649 heartbeat IPC: 0.622286 cumulative IPC: 0.34302 (Simulation time: 0 hr 0 min 48 sec) 
+Heartbeat CPU 0 instructions: 40000003 cycles: 48075219 heartbeat IPC: 0.38474 cumulative IPC: 0.36975 (Simulation time: 0 hr 1 min 10 sec) 
+Heartbeat CPU 0 instructions: 50000000 cycles: 72941238 heartbeat IPC: 0.402155 cumulative IPC: 0.382064 (Simulation time: 0 hr 1 min 31 sec) 
+Finished CPU 0 instructions: 25000001 cycles: 65433974 cumulative IPC: 0.382065 (Simulation time: 0 hr 1 min 31 sec) 
 
 ChampSim completed all CPUs
 
