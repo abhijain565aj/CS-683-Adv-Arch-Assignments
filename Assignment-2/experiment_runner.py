@@ -119,7 +119,10 @@ PATTERNS = {
     "l2i_load_mpki": re.compile(rf"\bL2C\s+INSTRUCTION\s+LOAD\s+MPKI:\s*({NUMBER})", re.I),
     "l2d_load_mpki": re.compile(rf"\bL2C\s+DATA\s+LOAD\s+MPKI:\s*({NUMBER})", re.I),
     "l1d_load_misses": re.compile(
-        r"\bL1D\s+LOAD\s+ACCESS:\s*\d+\s+HIT:\s*\d+\s+MISS:\s*(\d+)", re.I
+        r"\bL1D\s+LOAD\b[^\n]*?\bMISS(?:ES)?\s*:\s*(\d+)", re.I
+    ),
+    "l2c_load_misses": re.compile(
+        r"(?:^|\n)\s*L2C\s+LOAD\b[^\n]*?\bMISS(?:ES)?\s*:\s*(\d+)", re.I
     ),
     "prefetch_useful": re.compile(r"\bL1D\s+USEFUL\s+LOAD\s+PREFETCHES:\s*(\d+)", re.I),
     "prefetch_issued": re.compile(
@@ -156,20 +159,40 @@ def parse_thresholds(value: str) -> list[float]:
     return thresholds
 
 
-def parse_output(output: str) -> dict[str, float]:
+def parse_output(output: str, simulation_instructions: Optional[int] = None) -> dict[str, float]:
     result = {}
     for key, pattern in PATTERNS.items():
         matches = pattern.findall(output)
         if matches:
             result[key] = float(matches[-1])
 
-    # Prefer an accuracy derived from the actual issued/useful counters.
+    # This ChampSim fork reports L1D and L2C LOAD MISS counts but may omit
+    # aggregate LOAD MPKI. Derive it from the simulation instruction count.
+    # Never use the number of warmup instructions in the denominator.
+    if simulation_instructions and simulation_instructions > 0:
+        for prefix in ("l1d", "l2c"):
+            name = f"{prefix}_load_mpki"
+            misses = result.get(f"{prefix}_load_misses")
+            if name not in result and misses is not None:
+                result[name] = 1000.0 * misses / simulation_instructions
+                result[f"{name}_source"] = "computed from LOAD misses"
+
+        # Some forks only print instruction and data load MPKI at L2, rather
+        # than an aggregate L2C LOAD line. Both components have the same
+        # denominator and their sum gives the corresponding total.
+        if ("l2c_load_mpki" not in result
+                and "l2i_load_mpki" in result and "l2d_load_mpki" in result):
+            result["l2c_load_mpki"] = (
+                result["l2i_load_mpki"] + result["l2d_load_mpki"]
+            )
+            result["l2c_load_mpki_source"] = "instruction + data LOAD MPKI"
+
+    # Prefer accuracy from the simulator's actual issued/useful counters.
     issued = result.get("prefetch_issued")
     useful = result.get("prefetch_useful")
     if issued is not None and useful is not None:
         result["prefetch_accuracy_pct"] = (100 * useful / issued) if issued else 0.0
     else:
-        # The simulator's ACCURACY field must already be in percentage units.
         matches = ACCURACY_PATTERN.findall(output)
         if matches:
             result["prefetch_accuracy_pct"] = float(matches[-1])
@@ -185,7 +208,14 @@ def find_traces(value: str, traces_dir: Optional[Path]) -> list[Path]:
         traces_dir = (ROOT / traces_dir).resolve()
 
     if value == "all":
-        files = sorted(p for p in traces_dir.glob("*.champsimtrace*") if p.is_file())
+        # The provided assignment traces can be Tr1.gz / Tr2.gz / Tr3.gz,
+        # not necessarily *.champsimtrace.xz.
+        files = sorted(
+            p for p in traces_dir.iterdir()
+            if p.is_file() and (
+                p.name.endswith((".gz", ".xz", ".champsimtrace"))
+            )
+        ) if traces_dir.is_dir() else []
     else:
         files = []
         for item in value.split(","):
@@ -285,7 +315,7 @@ def run_one(experiment: Experiment, binary: Path, task: str, trace: Path,
          "-simulation_instructions", str(simulation), "-traces", str(trace)],
         log_path, env=env, debug=debug,
     )
-    metrics = parse_output(output)
+    metrics = parse_output(output, simulation)
     if "ipc" not in metrics:
         raise RuntimeError(f"IPC not found in {log_path}; check the simulator output")
 
@@ -398,6 +428,34 @@ def run_task(task: str, traces: list[Path], warmup: int, simulation: int,
     return rows
 
 
+
+def reparse_task(task: str) -> None:
+    """Rebuild CSV/plots from saved ChampSim logs without another simulation."""
+    raw_path = DATA_DIR / f"{task}_raw.json"
+    if not raw_path.is_file():
+        raise RuntimeError(f"Missing {raw_path}; run this task first")
+    rows = json.loads(raw_path.read_text())
+    if not rows:
+        raise RuntimeError(f"No experiment rows in {raw_path}")
+    for row in rows:
+        log_path = ROOT / row["log"]
+        if not log_path.is_file():
+            raise RuntimeError(f"Missing simulator log: {log_path}")
+        output = log_path.read_text(errors="replace")
+        # Remove stale parser outputs but keep configuration and run metadata.
+        for key in list(row):
+            if key not in {"trace", "configuration", "description", "threshold",
+                           "warmup_instructions", "simulation_instructions", "log"}:
+                del row[key]
+        metrics = parse_output(output, int(row["simulation_instructions"]))
+        if "ipc" not in metrics:
+            raise RuntimeError(f"IPC not found in simulator log {log_path}")
+        row.update(metrics)
+    add_derived_metrics(rows, task)
+    write_task_data(task, rows)
+    plot_task(task)
+
+
 def save_figure(fig, output_base: Path) -> None:
     fig.tight_layout()
     fig.savefig(output_base.with_suffix(".png"), dpi=180)
@@ -492,7 +550,7 @@ def plot_task(task: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("list", "run", "plot", "all"))
+    parser.add_argument("command", choices=("list", "run", "plot", "all", "reparse"))
     parser.add_argument("--task", choices=tuple(TASK_EXPERIMENTS), default="task1b")
     parser.add_argument("--traces", default="all", help="all or comma-separated filenames/paths")
     parser.add_argument("--traces-dir", type=Path, default=None,
@@ -513,6 +571,10 @@ def main() -> int:
             for name in names:
                 x = EXPERIMENTS[name]
                 print(f"  {name}: {x.prefetcher}/{x.replacement} - {x.description}")
+        return 0
+
+    if args.command == "reparse":
+        reparse_task(args.task)
         return 0
 
     if args.command in ("run", "all"):
