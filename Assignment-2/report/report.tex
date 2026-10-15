@@ -70,11 +70,6 @@ MPKI is misses per thousand measured instructions. L1D and aggregate L2C load MP
 
 Prefetch accuracy is reported as the percentage of issued L1D prefetches later used, using the runner's parsed useful/issued counters where available. It is not applicable to a no-prefetch configuration, so the tables use N/A rather than interpreting the raw zero as measured accuracy. L1D coverage is calculated per trace as $(M_{\mathrm{baseline}}-M_{\mathrm{prefetcher}})/M_{\mathrm{baseline}}\times100\%$, where $M$ is the count of L1D load misses and the baseline is no-prefetch + LRU.
 
-\subsection{Trace inventory and result provenance}
-The CSV and JSON exports cover Tr1.gz, Tr2.gz, and Tr3.gz with 25M warmup and 25M measured instructions per run. Raw JSON retains log paths, but simulator logs were not included in the supplied archive.
-
-\textbf{Implementation note.} The updated Task 2B data contains distinct results for all five thresholds, so the sensitivity analysis reflects a real sweep. Task 3 metadata records the combined run with \texttt{prefetch\_irrip}; the assignment specifically names \texttt{replacement/dyn\_irrip.l2c\_repl} as the file to modify. The prefetch-aware behavior is measured, but the implementation should be placed in the required file (or the submission should clearly document the integration) before final submission.
-
 \newpage\input{task1a}
 \newpage\input{task1b}
 \newpage\input{task2a}
