@@ -1,71 +1,90 @@
 \section{Task 3: Combining SPP with Dynamic I-RRIP}
 \label{sec:task3}
-\subsection{Prefetch-aware replacement code in the supplied archive}
-The code archive contains a separate \texttt{replacement/prefetch\_irrip.l2c\_repl} implementation. That file tracks a per-set/per-way \texttt{prefetched} flag, uses the \texttt{PREFETCH} request type, and reads \texttt{CHAMPSIM\_THRESHOLD} at initialization (default 0.25). When a prefetch fills a way, the flag is set and its RRPV is initialized to the maximum value 3, leaving it easy to evict if it is never used. During victim search it first prefers a maximum-RRPV prefetched line; if none qualifies and I-RRIP is active, it next prefers a maximum-RRPV data line, then falls back to any maximum-RRPV line. When a demand hit occurs on a flagged prefetched line, the code counts it as useful, clears the flag, and promotes it using the active RRIP/I-RRIP rules. A prefetch hit itself returns without promoting the line. The policy excludes prefetch requests from the counters used to choose the dynamic mode.
 
-This design follows a reasonable pollution-control rule: speculative lines enter with low protection, while demand reuse gives them normal replacement treatment. The implementation also reports useful and unused-prefetch counts at finalization. These are code-review facts about \texttt{prefetch\_irrip}; they are not, by themselves, evidence of performance improvement.
+\subsection{Prefetch-aware replacement policy}
+The combined policy uses SPP at L1D and a prefetch-aware version of Dynamic I-RRIP at L2C. As in Task 2B, sets with $s\bmod 32=0$ always run RRIP, sets with $s\bmod 32=1$ always run I-RRIP, and the remaining sets follow the shared dynamic decision. The reference threshold is $T=0.25$. The two groups of leader sets keep their ordinary replacement behavior, while prefetch-aware handling is applied only to the follower sets.
 
-\subsection{Which Task 3 configuration was measured?}
-The Task 3 CSV/JSON metadata and run labels identify the combined
-configuration as \texttt{combined-dyn\_irrip}. The supplied runner also
-defaults the combined replacement option to \texttt{dyn\_irrip}. In the
-provided source archive, \texttt{dyn\_irrip.l2c\_repl} does not implement
-the per-way prefetch tracking/eviction logic described above. Consequently,
-the measurements below are labeled \textbf{SPP + dyn\_irrip (as recorded)};
-they cannot be presented as measured results for the separate prefetch-aware
-\texttt{prefetch\_irrip} file. The Task 3 requirement should be re-evaluated
-after the prefetch-aware logic is integrated into the specified dynamic policy
-and the runs are repeated.
+For the follower sets, the policy maintains a prefetched flag for each cache way. A line filled by a prefetch is marked and inserted with RRPV 3, making it a likely eviction candidate. When looking for a victim, the policy first prefers an unused prefetched line among the ways at RRPV 3. If none exists, it applies the usual I-RRIP data-line preference when that mode is active, before falling back to regular maximum-RRPV selection. Thus, unused speculative lines receive less protection, while instruction prioritization is still retained.
+
+A prefetch hit does not promote the line. On a non-prefetch demand hit, a marked line is counted as useful, its flag is cleared, and its RRPV is updated using the selected RRIP or I-RRIP policy. A prefetched line evicted without such a hit is counted as unused. Prefetches and writebacks are excluded from the demand-activity statistic used to choose the follower policy. This design aims to reduce cache pollution without discarding the instruction-conscious behavior of Dynamic I-RRIP. The useful and unused counts maintained here describe L2C follower-set prefetch tracking; they should not be confused with the L1D prefetch-accuracy counter reported below.
+
+\subsection{Experimental configurations}
+We compare four configurations on each of the three traces: no prefetching with LRU, standalone SPP with LRU, standalone Dynamic I-RRIP without prefetching, and the combined SPP with prefetch-aware Dynamic I-RRIP. Both dynamic replacement configurations use $T=0.25$. Each experiment uses 25 million warmup instructions and 25 million measured instructions. Speedup is calculated relative to the no-prefetch + LRU baseline of the same trace.
+
+The new experiment metadata records \texttt{spp} as the L1D prefetcher and \texttt{prefetch\_irrip} as the L2 replacement policy for the combined runs. The ordinary dynamic-only runs use \texttt{dyn\_irrip}. We kept the two implementations separate to compare their measured behavior. The assignment names \texttt{replacement/dyn\_irrip.l2c\_repl} as the expected implementation location for Task 3, so the prefetch-aware changes must also be present in the required submitted policy file.
 
 \subsection{Measured results: IPC, speedup, and L1D behavior}
-\begin{table}[H]\centering\scriptsize
-\caption{Task 3 data as recorded. Speedup is relative to no-prefetch + LRU for the same trace.}
+Table~\ref{tab:t3-l1d} summarizes IPC, speedup, prefetch accuracy, L1D coverage, and L1D load MPKI. Accuracy is computed from the recorded useful and issued prefetch counts. Coverage is the reduction in L1D load misses relative to the no-prefetch baseline, divided by the baseline miss count. Accuracy and coverage are marked N/A where no prefetcher is enabled.
+
+\begin{table}[H]
+\centering\scriptsize
+\caption{Task 3 IPC and L1D measurements. Speedup uses no-prefetch + LRU as the baseline for each trace.}
+\label{tab:t3-l1d}
 \resizebox{\linewidth}{!}{\begin{tabular}{llrrrrr}
-\toprule Trace & Configuration & IPC & Speedup & Accuracy (\%) & Coverage (\%) & L1D load MPKI \\
+\toprule
+Trace & Configuration & IPC & Speedup & Accuracy (\%) & Coverage (\%) & L1D load MPKI \\
 \midrule
-Tr1.gz & Baseline (LRU, no prefetch) & 0.232345 & 1.000000 & N/A & N/A & 10.6780 \\
-Tr1.gz & SPP only & 0.232577 & 1.000999 & 41.33 & 1.23 & 10.5465 \\
-Tr1.gz & Dynamic I-RRIP only & 0.232281 & 0.999725 & N/A & N/A & 10.6788 \\
-Tr1.gz & SPP + \texttt{dyn\_irrip} (as recorded) & 0.232482 & 1.000590 & 41.07 & 1.22 & 10.5476 \\
-Tr2.gz & Baseline (LRU, no prefetch) & 0.251158 & 1.000000 & N/A & N/A & 13.5379 \\
-Tr2.gz & SPP only & 0.251094 & 0.999745 & 33.54 & 0.27 & 13.5014 \\
-Tr2.gz & Dynamic I-RRIP only & 0.256285 & 1.020413 & N/A & N/A & 13.5412 \\
-Tr2.gz & SPP + \texttt{dyn\_irrip} (as recorded) & 0.256303 & 1.020485 & 33.34 & 0.23 & 13.5064 \\
-Tr3.gz & Baseline (LRU, no prefetch) & 0.382065 & 1.000000 & N/A & N/A & 3.4034 \\
-Tr3.gz & SPP only & 0.382139 & 1.000194 & 8.51 & 0.28 & 3.3938 \\
-Tr3.gz & Dynamic I-RRIP only & 0.381742 & 0.999155 & N/A & N/A & 3.4033 \\
-Tr3.gz & SPP + \texttt{dyn\_irrip} (as recorded) & 0.381886 & 0.999531 & 8.52 & 0.29 & 3.3937 \\
-\bottomrule\end{tabular}}
+Tr1.gz & Baseline (no prefetch + LRU) & 0.232345 & 1.000000 & N/A & N/A & 10.6780 \\
+Tr1.gz & SPP + LRU & 0.233237 & 1.003839 & 56.35 & 3.69 & 10.2844 \\
+Tr1.gz & Dynamic I-RRIP & 0.232219 & 0.999458 & N/A & N/A & 10.6793 \\
+Tr1.gz & SPP + prefetch-aware I-RRIP & 0.233157 & 1.003495 & 56.47 & 3.67 & 10.2861 \\
+\midrule
+Tr2.gz & Baseline (no prefetch + LRU) & 0.251158 & 1.000000 & N/A & N/A & 13.5379 \\
+Tr2.gz & SPP + LRU & 0.251210 & 1.000207 & 51.77 & 0.61 & 13.4560 \\
+Tr2.gz & Dynamic I-RRIP & 0.256301 & 1.020477 & N/A & N/A & 13.5414 \\
+Tr2.gz & SPP + prefetch-aware I-RRIP & 0.256389 & 1.020828 & 52.07 & 0.58 & 13.4589 \\
+\midrule
+Tr3.gz & Baseline (no prefetch + LRU) & 0.382065 & 1.000000 & N/A & N/A & 3.4034 \\
+Tr3.gz & SPP + LRU & 0.382721 & 1.001717 & 18.62 & 1.45 & 3.3542 \\
+Tr3.gz & Dynamic I-RRIP & 0.381785 & 0.999267 & N/A & N/A & 3.4034 \\
+Tr3.gz & SPP + prefetch-aware I-RRIP & 0.382446 & 1.000997 & 18.83 & 1.47 & 3.3535 \\
+\bottomrule
+\end{tabular}}
 \end{table}
+
+\plotpair{plots/task3/ipc.png}{IPC}{plots/task3/speedup.png}{Speedup}{Task 3 IPC and speedup across the four configurations}{fig:t3-ipc-speedup}
+\plotpair{plots/task3/l1d_load_mpki.png}{L1D load MPKI}{plots/task3/l1d_coverage_pct.png}{L1D coverage}{L1D miss intensity and prefetch coverage}{fig:t3-l1d}
+\plotpair{plots/task3/prefetch_accuracy_pct.png}{Prefetch accuracy}{plots/task3/l2c_load_mpki.png}{L2C load MPKI}{Prefetch accuracy and L2C load-miss behavior}{fig:t3-accuracy-l2c}
 
 \subsection{L2 behavior}
-\begin{table}[H]\centering\scriptsize
-\caption{L2 statistics by trace/configuration. These use the separate aggregate L2C and instruction/data counters described in Section 1.}
+Table~\ref{tab:t3-l2} reports L2C load MPKI and the separate instruction-load and data-load MPKI statistics. The aggregate L2C load MPKI is derived from the reported L2C load-miss count over the measured instruction count; the instruction/data values are separately reported simulator statistics and are not treated as additive components of that total.
+
+\begin{table}[H]
+\centering\scriptsize
+\caption{Task 3 L2 load-MPKI metrics for each trace and configuration.}
+\label{tab:t3-l2}
 \resizebox{\linewidth}{!}{\begin{tabular}{llrrr}
-\toprule Trace & Configuration & L2C load MPKI & L2 instruction-load MPKI & L2 data-load MPKI \\
+\toprule
+Trace & Configuration & L2C load MPKI & L2 instruction-load MPKI & L2 data-load MPKI \\
 \midrule
-Tr1.gz & Baseline (LRU, no prefetch) & 2.2774 & 10.3377 & 7.3580 \\
-Tr1.gz & SPP only & 2.2805 & 10.3556 & 7.2210 \\
-Tr1.gz & Dynamic I-RRIP only & 2.3941 & 9.9094 & 7.6956 \\
-Tr1.gz & SPP + \texttt{dyn\_irrip} (as recorded) & 2.3894 & 9.9151 & 7.5314 \\
-Tr2.gz & Baseline (LRU, no prefetch) & 2.2437 & 18.8533 & 8.5035 \\
-Tr2.gz & SPP only & 2.2457 & 18.9067 & 8.4938 \\
-Tr2.gz & Dynamic I-RRIP only & 2.3631 & 13.3453 & 9.1221 \\
-Tr2.gz & SPP + \texttt{dyn\_irrip} (as recorded) & 2.3648 & 13.3179 & 9.1141 \\
-Tr3.gz & Baseline (LRU, no prefetch) & 0.6972 & 1.1241 & 2.8302 \\
-Tr3.gz & SPP only & 0.7033 & 1.1386 & 2.8119 \\
-Tr3.gz & Dynamic I-RRIP only & 0.7235 & 1.1464 & 2.8764 \\
-Tr3.gz & SPP + \texttt{dyn\_irrip} (as recorded) & 0.7275 & 1.1494 & 2.8502 \\
-\bottomrule\end{tabular}}
+Tr1.gz & Baseline (no prefetch + LRU) & 2.2774 & 10.3377 & 7.3580 \\
+Tr1.gz & SPP + LRU & 2.2779 & 10.3502 & 6.9673 \\
+Tr1.gz & Dynamic I-RRIP & 2.3960 & 9.9169 & 7.6925 \\
+Tr1.gz & SPP + prefetch-aware I-RRIP & 2.3866 & 9.9353 & 7.2691 \\
+\midrule
+Tr2.gz & Baseline (no prefetch + LRU) & 2.2437 & 18.8533 & 8.5035 \\
+Tr2.gz & SPP + LRU & 2.2446 & 18.8880 & 8.4703 \\
+Tr2.gz & Dynamic I-RRIP & 2.3619 & 13.2471 & 9.1218 \\
+Tr2.gz & SPP + prefetch-aware I-RRIP & 2.3672 & 13.2150 & 9.0867 \\
+\midrule
+Tr3.gz & Baseline (no prefetch + LRU) & 0.6972 & 1.1241 & 2.8302 \\
+Tr3.gz & SPP + LRU & 0.7000 & 1.1313 & 2.6920 \\
+Tr3.gz & Dynamic I-RRIP & 0.7269 & 1.1262 & 2.8785 \\
+Tr3.gz & SPP + prefetch-aware I-RRIP & 0.7211 & 1.1436 & 2.7297 \\
+\bottomrule
+\end{tabular}}
 \end{table}
 
-\plotpair{plots/task3/ipc.png}{IPC}{plots/task3/speedup.png}{Speedup}{Task 3 measured configuration comparison}{fig:t3-ipc-speedup}
-\plotpair{plots/task3/l1d_load_mpki.png}{L1D load MPKI}{plots/task3/l1d_coverage_pct.png}{L1D coverage}{Task 3 L1D miss and coverage behavior}{fig:t3-l1d}
-\plotpair{plots/task3/prefetch_accuracy_pct.png}{Prefetch accuracy}{plots/task3/l2c_load_mpki.png}{L2C load MPKI}{Task 3 prefetch accuracy and aggregate L2C metric}{fig:t3-accuracy-l2c}
-\plotpair{plots/task3/l2i_load_mpki.png}{L2 instruction-load MPKI}{plots/task3/l2d_load_mpki.png}{L2 data-load MPKI}{Task 3 L2 instruction and data behavior}{fig:t3-l2i-l2d}
-\plotpair{plots/task3/ipc_change_vs_baseline_pct.png}{IPC change vs. baseline (\%)}{plots/task3/ipc_gain_vs_best_standalone_pct.png}{IPC gain vs. best standalone (\%)}{Additional Task 3 relative-performance views}{fig:t3-relative}
+\plotpair{plots/task3/l2i_load_mpki.png}{L2 instruction-load MPKI}{plots/task3/l2d_load_mpki.png}{L2 data-load MPKI}{Instruction and data load-miss behavior at L2}{fig:t3-l2i-l2d}
+\plotpair{plots/task3/ipc_change_vs_baseline_pct.png}{IPC change vs. baseline (\%)}{plots/task3/ipc_gain_vs_best_standalone_pct.png}{IPC gain vs. best standalone (\%)}{Combined-policy IPC compared with the baseline and the better standalone policy}{fig:t3-relative}
 
-\subsection{Does the measured combined configuration meet the IPC goal?}
-The answer is trace-dependent even for the configuration recorded in the CSVs. On Tr1, the combined IPC is 0.232482, above the baseline and dynamic-only result but below SPP-only (0.232577). On Tr2, combined IPC is 0.256303, just above dynamic-only (0.256285) and clearly above SPP-only (0.251094); the difference over dynamic-only is only about 0.007\%. On Tr3, combined IPC is 0.381886, above dynamic-only (0.381742) but below SPP-only (0.382139) and below the no-prefetch baseline (0.382065). Therefore the recorded configuration does not outperform both standalone methods on all traces.
+\subsection{Discussion and IPC goal}
+The combined policy improves IPC over the no-prefetch baseline on all three traces: by 0.35\% on Tr1, 2.08\% on Tr2, and 0.10\% on Tr3. However, the assignment also asks whether it outperforms both standalone methods. Relative to the better of standalone SPP and Dynamic I-RRIP, the combined policy changes IPC by $-0.034\%$ on Tr1, $+0.034\%$ on Tr2, and $-0.072\%$ on Tr3. It therefore meets this stricter goal only on Tr2 in the current experiments.
 
-The results also show why no single metric is enough. Prefetch accuracy is approximately 41.07\%, 33.34\%, and 8.52\% for the combined configuration on Tr1--Tr3, while coverage is about 1.22\%, 0.23\%, and 0.29\%. L1D MPKI is modestly lower than baseline on all traces, but aggregate L2C MPKI is higher on all three. At the same time, instruction-load MPKI is considerably lower on Tr2, while data MPKI is higher than the no-prefetch baseline on all traces. Because the combined runs used \texttt{dyn\_irrip}, these observations are about the measured SPP + dynamic replacement configuration and must not be used to infer the effect of prefetch-aware victim selection.
+On Tr1, the combined IPC is 0.233157, below SPP alone (0.233237) but above Dynamic I-RRIP alone (0.232219). On Tr2, the combined IPC of 0.256389 is marginally higher than Dynamic I-RRIP (0.256301) and clearly higher than SPP alone (0.251210). On Tr3, the combined IPC of 0.382446 is higher than Dynamic I-RRIP (0.381785) but below SPP alone (0.382721). The differences from the best standalone method are small, so they should not be described as large or universal performance gains.
+
+In terms of prefetch behavior, the combined configuration has accuracies of 56.47\%, 52.07\%, and 18.83\% on Tr1--Tr3, close to standalone SPP (56.35\%, 51.77\%, and 18.62\%). Its L1D coverage is 3.67\%, 0.58\%, and 1.47\%, compared with 3.69\%, 0.61\%, and 1.45\% for SPP alone. Thus, adding the replacement policy changes L1D prefetch behavior only slightly on these traces.
+
+The combined policy reduces L2 data-load MPKI compared with Dynamic I-RRIP alone on all three traces (7.6925 to 7.2691 on Tr1, 9.1218 to 9.0867 on Tr2, and 2.8785 to 2.7297 on Tr3). Instruction-load MPKI is also much lower than the no-prefetch baseline on Tr1 and Tr2, although it is slightly higher on Tr3. The aggregate L2C load MPKI remains above the no-prefetch baseline in every trace. These results illustrate that the prefetch-aware policy trades off the protection of instruction, data, and speculative lines rather than improving every cache metric simultaneously.
+
+Overall, the prefetch-aware combined policy was successfully measured as a distinct configuration and gives a small IPC improvement over both standalone policies on Tr2. It does not do so on Tr1 or Tr3. The results support its intended cache-pollution-control mechanism as a design choice, but they do not establish a consistent IPC advantage across the supplied workloads.
