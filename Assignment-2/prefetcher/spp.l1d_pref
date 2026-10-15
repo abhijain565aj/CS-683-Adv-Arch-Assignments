@@ -165,6 +165,8 @@ void CACHE::l1d_prefetcher_operate(uint64_t addr, uint64_t ip, uint8_t cache_hit
         stride *= -1;
     }
 
+    trackers[index].last_cl_addr = cl_addr;
+
     if (stride == 0)
         return;
 
